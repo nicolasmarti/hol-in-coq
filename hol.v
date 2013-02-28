@@ -13,6 +13,7 @@ Axiom imp: bool -> bool -> bool.
 Notation "b1 ==> b2" := (imp b1 b2) (at level 90, right associativity).
 
 Axiom choice: forall {A: Set}, (A -> bool) -> A.
+Notation "@@ x" := (choice x) (at level 100, no associativity).
 
 (* *)
 
@@ -39,9 +40,12 @@ Notation "'Forall' x : t , p" := (forall_def (fun x:t => p)) (at level 200, x id
 
 (* conjunction *)
 Definition conj_def (p1 p2: bool) : bool := Forall p, (p1 ==> (p2 ==> p)) ==> p.
+Notation "b1 /\ b2" := (conj_def b1 b2) (at level 80, right associativity).
 
 (* existential *)
 Definition exists_def {A: Set} (P: A -> bool) : bool := P (choice P). 
+Notation "'Exists' x , p" := (exists_def (fun x => p)) (at level 200, x ident).
+Notation "'Exists' x : t , p" := (exists_def (fun x:t => p)) (at level 200, x ident, format "'Exists' '/ ' x : t , '/ ' p").
 
 (* some lemmas on equality *)
 Lemma mk_comb1 {A B: Set} (f1 f2: A -> B) (t: A): (|- f1 = f2) -> (|- f1 t = f2 t). 
@@ -68,4 +72,14 @@ eapply eq_mp; [apply H0 | apply eq_refl].
 apply mk_comb2 with (f := fun x => x = t1); auto.
 Qed.
 
-(* subst rules ??? *)
+(* false *)
+Definition false : bool := Forall b: bool, b.
+
+(* disjunction *)
+Definition disj_def (p1 p2: bool) : bool := Forall p, (p1 ==> p) ==> (p2 ==> p) ==> p.
+Notation "b1 \/ b2" := (disj_def b1 b2) (at level 85, right associativity).
+
+(* negation *)
+Definition not_def (p: bool) : bool := p ==> false.
+Notation "~~ x" := (not_def x) (at level 75, no associativity).
+
