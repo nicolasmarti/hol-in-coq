@@ -83,3 +83,8 @@ Notation "b1 \/ b2" := (disj_def b1 b2) (at level 85, right associativity).
 Definition not_def (p: bool) : bool := p ==> false.
 Notation "~~ x" := (not_def x) (at level 75, no associativity).
 
+(* unique existential *)
+Definition uexists_def {A: Set} (P: A -> bool) : bool := Exists x, P x /\ (Forall y, P y ==> x = y).
+Notation "'UExists' x , p" := (uexists_def (fun x => p)) (at level 200, x ident).
+Notation "'UExists' x : t , p" := (uexists_def (fun x:t => p)) (at level 200, x ident, format "'UExists' '/ ' x : t , '/ ' p").
+
