@@ -1,3 +1,9 @@
+Class non_empty_set (A: Set) := {
+  witeness: A
+}. 
+
+
+
 (* the primary type bool (we overwrite the coq bool type) *)
 Axiom bool: Set.
 
@@ -12,7 +18,7 @@ Notation "x = y" := (@eq _ x y) (at level 70, no associativity).
 Axiom imp: bool -> bool -> bool.
 Notation "b1 ==> b2" := (imp b1 b2) (at level 90, right associativity).
 
-Axiom choice: forall {A: Set}, (A -> bool) -> A.
+Axiom choice: forall {A: Set} {H: non_empty_set A}, (A -> bool) -> A.
 Notation "@@ x" := (choice x) (at level 100, no associativity).
 
 (* *)
@@ -26,7 +32,7 @@ Axiom mp: forall b1 b2, (|- b1 ==> b2) -> (|- b1) -> (|- b2).
 Axiom eq_mp: forall b1 b2, (|- b1 = b2) -> (|- b1) -> (|- b2).
 Axiom eta_ax: forall {A B: Set} (f: A -> B), (|- (fun x => f x) = f).
 Axiom imp_antisym: forall p1 p2, |- (p1 ==> p2) ==> ((p2 ==> p1) ==> (p1 = p2)).
-Axiom select_ax: forall {A: Set} (P: A -> bool) (x: A), |- P x ==> P (choice P).
+Axiom select_ax: forall {A: Set} {H: non_empty_set A} (P: A -> bool) (x: A), |- P x ==> P (choice P).
 
 (* few definitions *)
 
@@ -43,7 +49,7 @@ Definition conj_def (p1 p2: bool) : bool := Forall p, (p1 ==> (p2 ==> p)) ==> p.
 Notation "b1 /\ b2" := (conj_def b1 b2) (at level 80, right associativity).
 
 (* existential *)
-Definition exists_def {A: Set} (P: A -> bool) : bool := P (choice P). 
+Definition exists_def {A: Set} {H: non_empty_set A} (P: A -> bool) : bool := P (choice P). 
 Notation "'Exists' x , p" := (exists_def (fun x => p)) (at level 200, x ident).
 Notation "'Exists' x : t , p" := (exists_def (fun x:t => p)) (at level 200, x ident, format "'Exists' '/ ' x : t , '/ ' p").
 
@@ -84,7 +90,7 @@ Definition not_def (p: bool) : bool := p ==> false.
 Notation "~~ x" := (not_def x) (at level 75, no associativity).
 
 (* unique existential *)
-Definition uexists_def {A: Set} (P: A -> bool) : bool := Exists x, P x /\ (Forall y, P y ==> x = y).
+Definition uexists_def {A: Set} {H: non_empty_set A} (P: A -> bool) : bool := Exists x, P x /\ (Forall y, P y ==> x = y).
 Notation "'UExists' x , p" := (uexists_def (fun x => p)) (at level 200, x ident).
 Notation "'UExists' x : t , p" := (uexists_def (fun x:t => p)) (at level 200, x ident, format "'UExists' '/ ' x : t , '/ ' p").
 
