@@ -198,13 +198,13 @@ Lemma term_semantics_fn
 Qed.
 
 Definition term_free_vars (t: term): list string :=
-  term_recursion (fun t => list string) (fun s => s::nil) (fun s l H => concat (map_term l H)) t.
+  term_recursion (fun t => list string) (fun s => s::nil) (fun s l H => List.concat (map_term l H)) t.
 
 Lemma term_free_vars_fn: forall s l,
-    term_free_vars (fn s l) = concat (map term_free_vars l).
+    term_free_vars (fn s l) = List.concat (map term_free_vars l).
   intros.
   unfold term_free_vars.
-  apply term_recursion_map_term_fn with (f_fn := fun s l => concat l).
+  apply term_recursion_map_term_fn with (f_fn := fun s l => List.concat l).
 Qed.
 
 Program Definition term_semantics_free_vars
@@ -303,7 +303,7 @@ Fixpoint formula_free_vars (f: formula) : list string :=
     match f with
   | True => nil
   | False => nil
-  | Atom (R P args) => concat (map term_free_vars args)
+  | Atom (R P args) => List.concat (map term_free_vars args)
   | Eq t1 t2 => term_free_vars t1 ++ term_free_vars t2
   | Not f => formula_free_vars f
   | And f1 f2 => formula_free_vars f1 ++ formula_free_vars f2
