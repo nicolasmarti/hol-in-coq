@@ -26,12 +26,13 @@ Fixpoint sum_list_nat (l: list nat) : nat :=
   | hd::tl => hd + sum_list_nat tl
   end.
 
-Require Import Omega.
+Require Import Lia.
 
 Lemma sum_list_nat_elt: forall (l: list nat) (x: nat),
     In x l -> sum_list_nat l >= x.
-  induction l; simpl; intros; intuition.
-  generalize (IHl _ H0); intros; intuition.
+  induction l; simpl; intro; intuition.
+  subst a; lia.
+  generalize (IHl _ H0); intros; intuition; lia.
 Qed.
 
 Fixpoint term_measure (t: term): nat :=
@@ -45,11 +46,11 @@ Lemma term_measure_elt: forall s l x,
     term_measure x < term_measure (fn s l).
 intro; induction l; intuition.
 inversion H.
-simpl; simpl in IHl.
-inversion_clear H.
-subst a; omega.
-generalize (IHl x H0); intros; auto.
-omega.
+subst x; simpl.
+lia.
+simpl.
+generalize (IHl x H0); simpl; intros; auto.
+lia.
 Qed.
 
 Require Import Coq.Program.Wf.
@@ -321,8 +322,6 @@ Lemma remove_In_diff: forall {A: Set} H
   inversion_clear H1.
   subst x.
   destruct (H x0 a); intuition.
-  subst a.
-  intuition.
   destruct (H x0 a); intuition.
 Qed.
 
@@ -351,8 +350,8 @@ Lemma formula_semantics_free_vars:
   eapply Hyp.
   rewrite <- flat_map_concat_map; rewrite in_flat_map; exists a; auto.
 
-  rewrite term_semantics_free_vars with (ctxt_var3 := ctxt_var1) (ctxt_var4 := ctxt_var2).
-  rewrite term_semantics_free_vars with (ctxt_var3 := ctxt_var1) (ctxt_var4 := ctxt_var2).
+  rewrite term_semantics_free_vars with (ctxt_var1 := ctxt_var1) (ctxt_var2 := ctxt_var2).
+  rewrite term_semantics_free_vars with (ctxt_var1 := ctxt_var1) (ctxt_var2 := ctxt_var2).
   intuition.
   intros; apply Hyp; apply List.in_or_app; right; auto.
   intros; apply Hyp; apply List.in_or_app; left; auto.
