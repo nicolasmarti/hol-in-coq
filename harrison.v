@@ -1,3 +1,5 @@
+Require Import Nat.
+Require Import Peano_dec.
 Require Import List.
 Import ListNotations.
 Require Import String.
@@ -726,7 +728,7 @@ Lemma conj_forall_eq_m (l: list formula) {V} (m: @Model V):
   sauto.
 Qed.
 
-Lemma conj_forall_eq_v (l: list formula) {V} (m: @Model V):
+Lemma conj_forall_eq_v (l: list formula):
   (forall x, In x l -> |- x) <->
     (|- formulas_conj l).
   induction l; simpl; intros.
@@ -735,11 +737,11 @@ Lemma conj_forall_eq_v (l: list formula) {V} (m: @Model V):
   generalize (H a); intros; sauto.
   inversion_clear H0.  
   subst x; red; intros.
-  generalize (H _ m0); intro H1; inversion_clear H1; auto.
+  generalize (H _ m); intro H1; inversion_clear H1; auto.
   inversion_clear IHl.
   apply H2; auto.
   red; intros.
-  generalize (H _ m0); intros; sauto.
+  generalize (H _ m); intros; sauto.
 Qed.
 
 Lemma conj_forall_eq (l: list (term * term)) {V} (m: @Model V):
@@ -1346,7 +1348,100 @@ Lemma close_goal (g: goal) (t: tuple (map (fun x => |- x) (hypothesises g) )): |
   apply (modusponens justification0 H).
 Qed.
 
+Definition closed_goal (g: goal) := eq_nat_dec 0 (List.length (hypothesises g)).
+
+Definition is_closed_goal (g: goal) := (List.length (hypothesises g)) = 0.
+
+Lemma closed_goal_ccl (g: goal):
+  is_closed_goal g ->
+  |- ccl g.
+  destruct g.
+  intros.
+  apply close_goal.
+  destruct hypothesises0.
+  simpl.
+  apply tnil.
+  sauto.
+Qed.
+
+(* solving a subgoal 
+
+given
+|- p_0 -> ... -> p_i -> ... -> p_n -> g
+|- p_i
+
+we can remove the p_i
+|- p_0 -> ... -> p_n -> g
+
+*)
+
+Fixpoint remove_dec
+  {A: Type}
+  (A_dec: forall (x y: A), { x = y } + { x <> y })
+  (x: A)
+  (l: list A) :=
+  match l with
+  | nil => nil
+  | hd::tl =>
+      match A_dec x hd with
+      | left _ => remove_dec A_dec x tl
+      | right _ => hd::(remove_dec A_dec x tl)
+      end
+  end.
+
+Lemma remove_dec_in1 {A: Type} (A_dec: forall (x y: A), { x = y } + { x <> y }) (x: A):
+  forall (l: list A),
+  forall (e: A), In e (remove_dec A_dec x l) -> e <> x.
+  induction l; simpl; intros; auto.
+  destruct (A_dec x a).
+  sauto.
+  sauto.
+Qed.
+
+Lemma remove_dec_in2  {A: Type} (A_dec: forall (x y: A), { x = y } + { x <> y }) (x: A):
+  forall (l: list A),
+  forall (e: A), In e l -> e <>x -> In e (remove_dec A_dec x l).
+  induction l; simpl; intros; auto.
+  destruct (A_dec x a).
+  sauto.
+  sauto.
+Qed.
+
+Lemma solved_hypothesis {l: list formula} {ccl: formula} {p: formula}:
+  forall
+    (H: |- p)
+    (H1: |- formulas_conj l ==> ccl)
+    , |- formulas_conj (remove_dec formula_dec p l) ==> ccl.
+  intros.
+  red; intros.
+  intro.
+  rewrite <- conj_forall_eq_m in H0.
+  cut ( m |= formulas_conj l); intuition.
+  apply H1; intuition.
+  rewrite <- conj_forall_eq_m.
+  intros.
+  clear H1.
+  destruct (formula_dec x p).
+  sauto.
+  apply H0.
+  apply remove_dec_in2; auto.
+Qed.  
+
+Program Definition solve_hypothesis (g: goal) {p} (H: |- p): goal :=
+  {|
+    hypothesises:= remove_dec formula_dec p (hypothesises g);
+    ccl := ccl g;
+    justification := solved_hypothesis H (justification g)
+  |}.
+
+(*
+Lemma update_subgoal (l1: list formula) (ccl: formula):
+*)
+
+(* ?? issue of code replication in proofs ??? *)
+(* ccl update ~ *)
 (*
 Definition update_goals
              (root: goal)
-*)
+             (update: goal): goal.
+*)  
