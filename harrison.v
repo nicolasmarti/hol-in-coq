@@ -5,6 +5,11 @@ Import ListNotations.
 Require Import String.
 Require Import Lia.
 From Hammer Require Import Tactics.
+
+(* optional *)
+From Hammer Require Import Hammer.
+Set Hammer GSMode 2.
+
 Require Import Coq.Program.Wf.
 
 Open Scope string_scope.
@@ -321,6 +326,14 @@ Fixpoint models {V} (m: @Model V) (f: formula): Prop :=
   end.
 
 Notation "m '|=' f" := (@models _ m f) (at level 150, right associativity).
+
+(*
+
+  This axiom might be removed if:
+1) add equality decidability to ihabitedtype
+2) change the domain of predicate semantics in model from prop to true
+
+*)
 
 Axiom models_classical:
   forall {V} (m: @Model V) (f: formula),
@@ -1434,14 +1447,109 @@ Program Definition solve_hypothesis (g: goal) {p} (H: |- p): goal :=
     justification := solved_hypothesis H (justification g)
   |}.
 
-(*
-Lemma update_subgoal (l1: list formula) (ccl: formula):
-*)
+(*  this is a generalization of above *)
 
-(* ?? issue of code replication in proofs ??? *)
-(* ccl update ~ *)
-(*
-Definition update_goals
-             (root: goal)
-             (update: goal): goal.
-*)  
+Fixpoint replace_dec
+  {A: Type}
+  (A_dec: forall (x y: A), { x = y } + { x <> y })
+  (e: A)
+  (r: list A)
+  (l: list A) :=
+  match l with
+  | nil => nil
+  | hd::tl =>
+      match A_dec hd e with
+      | left _ => r ++ replace_dec A_dec e r tl
+      | right _ => hd::(replace_dec A_dec e r tl)
+      end
+  end.
+
+Lemma replace_dec_eq {A: Type}
+  (A_dec: forall (x y: A), { x = y } + { x <> y })
+  (e: A)
+  (r: list A): forall (l: list A),
+    In e l -> incl r (replace_dec A_dec e r l).
+  induction l; simpl; intros; auto.
+  sauto.
+  inversion_clear H.
+  subst a.
+  destruct (A_dec e e).
+  apply incl_appl.
+  apply incl_refl.
+  sauto.
+  destruct (A_dec a e).
+  apply incl_appl.
+  apply incl_refl.
+  sauto.
+Qed.  
+
+Lemma replace_dec_neq {A: Type}
+  (A_dec: forall (x y: A), { x = y } + { x <> y })
+  (e: A)
+  (r: list A): forall (l: list A),
+    forall (x: A),
+    In x l -> x <> e -> In x (replace_dec A_dec e r l).
+  induction l; simpl; intros; auto.
+  inversion_clear H.
+  destruct (A_dec a e).
+  sauto.
+  subst a.
+  sauto.
+  destruct (A_dec a e).
+  subst a.
+  apply in_or_app.
+  sauto.
+  sauto.
+Qed.
+
+Lemma formulas_conj_incl_m {V} (m: @Model V) (l1 l2: list formula):
+  incl l1 l2 ->
+  (m |= formulas_conj l2) -> m |= formulas_conj l1.
+  intros.
+  rewrite <- conj_forall_eq_m.
+  rewrite <- conj_forall_eq_m in H0.
+  intros.
+  apply H0.
+  sauto.
+Qed.
+
+Lemma generalize_implication
+  {l1: list formula} {ccl1: formula}
+  {l2: list formula} {ccl2: formula}  
+  :
+  forall
+    (H1: |- formulas_conj l1 ==> ccl1)
+    (H2: |- formulas_conj l2 ==> ccl2)
+    , |- formulas_conj (replace_dec formula_dec ccl2 l2 l1) ==> ccl1.
+  intros.
+  red; intros.
+  intro.
+  generalize (H1 _ m); intro.
+  cut (m |= formulas_conj l1).
+  sauto.
+  generalize (H2 _ m); intro.
+  clear H1 H2 H0.
+  rewrite <- conj_forall_eq_m.
+  intros.
+  destruct (formula_dec x ccl2).
+  subst x.
+  cut (m |= formulas_conj l2).
+  sauto.
+  generalize (replace_dec_eq formula_dec ccl2 l2 l1 H0); intros.
+  apply (formulas_conj_incl_m _ _ _ H1).
+  sauto.
+  generalize (replace_dec_neq formula_dec ccl2 l2 l1 _ H0 n); intros.
+  generalize (@conj_forall_eq_m  (replace_dec formula_dec ccl2 l2 l1) _ m).
+  sauto.
+Qed.
+
+Program Definition apply_to_goal (g: goal)
+  {l_hyps: list formula} {l_ccl: formula}
+  (H: |- formulas_conj l_hyps ==> l_ccl): goal :=
+  {|
+    hypothesises:= (replace_dec formula_dec l_ccl l_hyps (hypothesises g));
+    ccl := ccl g;
+    justification := generalize_implication (justification g) H
+  |}.
+
+
