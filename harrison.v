@@ -9,13 +9,18 @@ From Hammer Require Import Tactics.
 (* optional *)
 From Hammer Require Import Hammer.
 Set Hammer GSMode 2.
+(**)
 
 Require Import Coq.Program.Wf.
 
 Open Scope string_scope.
 Open Scope list_scope.
 
-(************)
+(**** some general helper lemmas ******)
+(*
+Morally those lemmas are more or less generic (i.e. not related to types defined below.
+But I could not find anything close in the standard library.
+*)
 
 Program Fixpoint list_dec {A: Set} (l1: list A) (A_dec: forall a1, In a1 l1 -> forall a2, { a1 = a2 } + { a1 <> a2 }) (l2: list A) { struct l1 }: { l1 = l2 } + { l1 <> l2 } :=
   match l1 with
@@ -41,12 +46,212 @@ Next Obligation.
   intuition.
 Defined.
 
+(* this one is highly suspicious *)
+
+Lemma remove_In_diff: forall {A: Set} H
+                             (l: list A) (x x0: A), x <> x0 -> List.In x l -> List.In x (@List.remove _ H x0 l).
+  do 2 intro.
+  induction l; simpl; intros; auto.
+  inversion_clear H1.
+  subst x.
+  destruct (H x0 a); intuition.
+  destruct (H x0 a); intuition.
+Qed.
+
+(* tuples *)
+
+Inductive tuple: forall (l: list Prop), Type :=
+| tnil: tuple nil
+| tcons: forall {hd: Prop} (thd: hd) {tl: list Prop} (ttl: tuple tl), tuple (hd::tl).
+
+Lemma in_f_map:
+  forall {A B: Type} (f: A -> B) (l: list A) (x: A),
+    In x l ->
+    In (f x) (map f l).
+  induction l.
+  sauto.
+  sauto.
+Qed.
+
+(**)
+
+Fixpoint remove_dec
+  {A: Type}
+  (A_dec: forall (x y: A), { x = y } + { x <> y })
+  (x: A)
+  (l: list A) :=
+  match l with
+  | nil => nil
+  | hd::tl =>
+      match A_dec x hd with
+      | left _ => remove_dec A_dec x tl
+      | right _ => hd::(remove_dec A_dec x tl)
+      end
+  end.
+
+Lemma remove_dec_in1 {A: Type} (A_dec: forall (x y: A), { x = y } + { x <> y }) (x: A):
+  forall (l: list A),
+  forall (e: A), In e (remove_dec A_dec x l) -> e <> x.
+  induction l; simpl; intros; auto.
+  destruct (A_dec x a).
+  sauto.
+  sauto.
+Qed.
+
+Lemma remove_dec_in2  {A: Type} (A_dec: forall (x y: A), { x = y } + { x <> y }) (x: A):
+  forall (l: list A),
+  forall (e: A), In e l -> e <>x -> In e (remove_dec A_dec x l).
+  induction l; simpl; intros; auto.
+  destruct (A_dec x a).
+  sauto.
+  sauto.
+Qed.
+
+(**)
+
+
+Fixpoint replace_dec
+  {A: Type}
+  (A_dec: forall (x y: A), { x = y } + { x <> y })
+  (e: A)
+  (r: list A)
+  (l: list A) :=
+  match l with
+  | nil => nil
+  | hd::tl =>
+      match A_dec hd e with
+      | left _ => r ++ replace_dec A_dec e r tl
+      | right _ => hd::(replace_dec A_dec e r tl)
+      end
+  end.
+
+Lemma replace_dec_eq {A: Type}
+  (A_dec: forall (x y: A), { x = y } + { x <> y })
+  (e: A)
+  (r: list A): forall (l: list A),
+    In e l -> incl r (replace_dec A_dec e r l).
+  induction l; simpl; intros; auto.
+  sauto.
+  inversion_clear H.
+  subst a.
+  destruct (A_dec e e).
+  apply incl_appl.
+  apply incl_refl.
+  sauto.
+  destruct (A_dec a e).
+  apply incl_appl.
+  apply incl_refl.
+  sauto.
+Qed.  
+
+Lemma replace_dec_neq {A: Type}
+  (A_dec: forall (x y: A), { x = y } + { x <> y })
+  (e: A)
+  (r: list A): forall (l: list A),
+    forall (x: A),
+    In x l -> x <> e -> In x (replace_dec A_dec e r l).
+  induction l; simpl; intros; auto.
+  inversion_clear H.
+  destruct (A_dec a e).
+  sauto.
+  subst a.
+  sauto.
+  destruct (A_dec a e).
+  subst a.
+  apply in_or_app.
+  sauto.
+  sauto.
+Qed.
+
+(**)
+
+
+Fixpoint unzip {A B} (l: list (A * B)): list A * list B :=
+  match l with
+  | nil => (nil, nil)
+  | (hd1, hd2)::tl =>
+      let (tl1, tl2) := unzip tl in
+      (hd1::tl1, hd2::tl2)
+  end.
+
+Lemma unzip_fst_snd {A B}: forall (l: list (A * B)),
+    unzip l = (fst (unzip l), snd (unzip l)).
+  induction l; simpl; intros; auto.
+  rewrite IHl; simpl.
+  destruct a; simpl; auto.
+Qed.  
+  
+Lemma unzip_unfold {A B}: forall (tl: list (A * B)) hd1 hd2,
+    unzip ((hd1, hd2)::tl) = (hd1::(fst (unzip tl)), hd2::(snd (unzip tl))).
+  induction tl.
+  intuition.
+  intros.
+  destruct a.
+  rewrite (IHtl a b).
+  sauto.
+Qed.
+
 (*****************************************)
 
+(* 
+we are defining the model before the terms & formulas, which might be strange
+*) 
+
+(* we defined a type to be used for the model
+   (rmq: if this is also defined with decidable equality, we might remove the axiom on decidability of formula)
+ *)
+
 Record InhabitedType : Type := {
-                                S :> Set;
-                                witness: exists v: S, True;
+                                set :> Set;
+                                witness: exists v: set, True;
                               }.
+
+
+Record Model {Value: InhabitedType}: Type := {
+    var_sem: string -> Value;
+    fn_sem: string -> list Value -> Value;
+    pred_sem: string -> list Value -> Prop;
+  }.
+
+(*
+  updating a model (changing variable mapping), together with variant / invariant lemmas
+ *)
+
+Definition updated_model {V} (m: @Model V) (x: string) (v: V): @Model V :=
+  {| var_sem := fun s => match string_dec x s with | left _ => v | right _ => var_sem m s end ;
+    fn_sem := fn_sem m;
+    pred_sem := pred_sem m ;
+  |}.
+
+Lemma updated_model_var_sem1 {V} (m: @Model V) (x: string) (v: V):
+  forall y, x <> y -> var_sem (updated_model m x v) y = var_sem m y.
+  destruct m.
+  simpl; intros.
+  sauto.
+Qed.
+
+Lemma updated_model_var_sem2 {V} (m: @Model V) (x: string) (v: V):
+  forall y, x = y -> var_sem (updated_model m x v) y = v.
+  destruct m.
+  simpl; intros.
+  sauto.
+Qed.
+
+Lemma updated_model_fn_sem {V} (m: @Model V) (x: string) (v: V):
+  forall f l,
+    fn_sem m f l = fn_sem (updated_model m x v) f l.
+  destruct m.
+  simpl; intros.
+  sauto.
+Qed.
+
+Lemma updated_model_pred_sem {V} (m: @Model V) (x: string) (v: V):
+  forall p l,
+    pred_sem m p l <-> pred_sem (updated_model m x v) p l.
+  destruct m.
+  simpl; intros.
+  sauto.
+Qed.
 
 (*****************************************)
 
@@ -87,6 +292,13 @@ generalize (IHl x H0); simpl; intros; auto.
 lia.
 Qed.
 
+(*
+  Maybe the most interesting point of this formalization:
+  term cannot be used with the usual inductive type workflow of Coq.
+  So we need to redefine the recursion scheme [here using the extra hypothesis in P_fn, that the terms are part of the list arguments.
+  Furthermore, we define two lemmas for rewriting on each constructors (avoiding too much verbose coq unfolding). In this case, the lemmas in WfExtensionality were more than instrumental.
+*)
+
 Program Fixpoint term_recursion
   (t: term) 
   (P: term -> Type)
@@ -118,7 +330,10 @@ Lemma term_recursion_fn P P_var P_fn: forall s l,
   auto.
 Qed.
 
-(* we are going to need a map variant *)
+(*
+  We will need a variant of map which covers the extra hypothesis that the term belongs to the function arguments
+*)
+
 Program Fixpoint map_term {A: Set} (l: list term) (P: forall x: term, In x l -> A) { struct l }: list A :=
   match l with
   | nil => nil
@@ -151,7 +366,11 @@ Qed.
   f_equal.
   rewrite <- IHl.
   auto.
-Qed.
+  Qed.
+
+(*
+  decidability of equiality on terms
+*)  
 
 Program Definition term_eq_dec (t1: term) : forall t2, { t1 = t2 } + { t1 <> t2 }:=
   term_recursion t1 (fun t => forall t2, { t = t2 } + { t <> t2 }) _ _.
@@ -172,57 +391,9 @@ Next Obligation.
   right; injection; intuition.
 Defined.
 
-Definition term_free_vars (t: term): list string :=
-  term_recursion t (fun t => list string) (fun s => s::nil) (fun s l H => List.concat (map_term l H)).
-
-Lemma term_free_vars_fn: forall s l,
-    term_free_vars (fn s l) = List.concat (map term_free_vars l).
-  intros.
-  unfold term_free_vars.
-  apply term_recursion_map_term_fn with (f_fn := fun s l => List.concat l).
-Qed.
-
-(**************************************)
-
-Inductive formula: Set :=
-| true: formula
-| false: formula
-| Atom: string -> list term -> formula
-| Eq: term -> term -> formula
-| Not: formula -> formula
-| And: formula -> formula -> formula
-| Or: formula -> formula -> formula
-| Imp: formula -> formula -> formula
-| Iff: formula -> formula -> formula
-| Forall: string -> formula -> formula
-| Exists: string -> formula -> formula.
-
-Notation "x1 == x2" := (Eq x1 x2) (at level 70, right associativity).
-Notation "~~ b" := (Not b) (at level 75, right associativity).
-Notation "b1 //\\ b2" := (And b1 b2) (at level 80, right associativity).
-Notation "b1 \\// b2" := (Or b1 b2) (at level 85, right associativity).
-Notation "b1 ==> b2" := (Imp b1 b2) (at level 90, right associativity).
-Notation "b1 <=> b2" := (Iff b1 b2) (at level 90, right associativity).
-Notation "'F' x , f" := (Forall x f) (at level 100, right associativity).
-Notation "'E' x , f" := (Exists x f) (at level 100, right associativity).
-
-Definition formula_dec: forall (f1 f2: formula), {f1 = f2} + {f1 <> f2}.
-  decide equality.
-  apply List.list_eq_dec; apply term_eq_dec.
-  apply string_dec.
-  apply term_eq_dec.
-  apply term_eq_dec.
-  apply string_dec.
-  apply string_dec.
-Defined.
-
-(***************************************)
-
-Record Model {Value: InhabitedType}: Type := {
-    var_sem: string -> Value;
-    fn_sem: string -> list Value -> Value;
-    pred_sem: string -> list Value -> Prop;
-  }.
+(*
+  Evaluation of a term given a model, together with rewriting lemmas for constructors
+*)
 
 Definition eval {V} (m: @Model V) (t: term) : V :=
   term_recursion t (fun _ => V) (var_sem m) (fun s l H => (fn_sem m) s (map_term l H)).
@@ -241,6 +412,24 @@ Lemma eval_fn {V} (m: @Model V):
   apply term_recursion_map_term_fn.
 Qed.
 
+(* 
+   free variables of a terms: set of variables in a term
+ *)
+
+Definition term_free_vars (t: term): list string :=
+  term_recursion t (fun t => list string) (fun s => s::nil) (fun s l H => List.concat (map_term l H)).
+
+(* just an helper for list of arguments *)
+Lemma term_free_vars_fn: forall s l,
+    term_free_vars (fn s l) = List.concat (map term_free_vars l).
+  intros.
+  unfold term_free_vars.
+  apply term_recursion_map_term_fn with (f_fn := fun s l => List.concat l).
+Qed.
+
+(*
+  if two models have the same values for the free variables of a term => there evaluations are the same
+*)
 Lemma free_vars_term_sem {V}:
   forall (t: term) (m1 m2: @Model V),
     (forall s, List.In s (term_free_vars t) -> var_sem m1 s = var_sem m2 s) ->
@@ -272,41 +461,48 @@ Lemma free_vars_terms_sem {V}:
   intros; apply H; intuition.
 Qed.
 
-Definition updated_model {V} (m: @Model V) (x: string) (v: V): @Model V :=
-  {| var_sem := fun s => match string_dec x s with | left _ => v | right _ => var_sem m s end ;
-    fn_sem := fn_sem m;
-    pred_sem := pred_sem m ;
-  |}.
 
-Lemma updated_model_var_sem1 {V} (m: @Model V) (x: string) (v: V):
-  forall y, x <> y -> var_sem (updated_model m x v) y = var_sem m y.
-  destruct m.
-  simpl; intros.
-  sauto.
-Qed.
+(**************************************)
 
-Lemma updated_model_var_sem2 {V} (m: @Model V) (x: string) (v: V):
-  forall y, x = y -> var_sem (updated_model m x v) y = v.
-  destruct m.
-  simpl; intros.
-  sauto.
-Qed.
+(*
+  First order formulas (we skip the type argument, and inlined fol in Atom
+*)
 
-Lemma updated_model_fn_sem {V} (m: @Model V) (x: string) (v: V):
-  forall f l,
-    fn_sem m f l = fn_sem (updated_model m x v) f l.
-  destruct m.
-  simpl; intros.
-  sauto.
-Qed.
+Inductive formula: Set :=
+| true: formula
+| false: formula
+| Atom: string -> list term -> formula
+| Eq: term -> term -> formula
+| Not: formula -> formula
+| And: formula -> formula -> formula
+| Or: formula -> formula -> formula
+| Imp: formula -> formula -> formula
+| Iff: formula -> formula -> formula
+| Forall: string -> formula -> formula
+| Exists: string -> formula -> formula.
 
-Lemma updated_model_pred_sem {V} (m: @Model V) (x: string) (v: V):
-  forall p l,
-    pred_sem m p l <-> pred_sem (updated_model m x v) p l.
-  destruct m.
-  simpl; intros.
-  sauto.
-Qed.
+Notation "x1 == x2" := (Eq x1 x2) (at level 70, right associativity).
+Notation "~~ b" := (Not b) (at level 75, right associativity).
+Notation "b1 //\\ b2" := (And b1 b2) (at level 80, right associativity).
+Notation "b1 \\// b2" := (Or b1 b2) (at level 85, right associativity).
+Notation "b1 ==> b2" := (Imp b1 b2) (at level 90, right associativity).
+Notation "b1 <=> b2" := (Iff b1 b2) (at level 90, right associativity).
+Notation "'F' x , f" := (Forall x f) (at level 100, right associativity).
+Notation "'E' x , f" := (Exists x f) (at level 100, right associativity).
+
+(* formula equality decidability *)
+
+Definition formula_dec: forall (f1 f2: formula), {f1 = f2} + {f1 <> f2}.
+  decide equality.
+  apply List.list_eq_dec; apply term_eq_dec.
+  apply string_dec.
+  apply term_eq_dec.
+  apply term_eq_dec.
+  apply string_dec.
+  apply string_dec.
+Defined.
+
+(* semantics of models *)
 
 Fixpoint models {V} (m: @Model V) (f: formula): Prop :=
   match f with
@@ -330,7 +526,7 @@ Notation "m '|=' f" := (@models _ m f) (at level 150, right associativity).
 (*
 
   This axiom might be removed if:
-1) add equality decidability to ihabitedtype
+1) add equality decidability to inhabitedtype
 2) change the domain of predicate semantics in model from prop to true
 
 *)
@@ -338,6 +534,10 @@ Notation "m '|=' f" := (@models _ m f) (at level 150, right associativity).
 Axiom models_classical:
   forall {V} (m: @Model V) (f: formula),
     (m |= f) \/ ~ (m |= f).
+
+(* 
+   free variables of a terms: set of variables in a term
+*)
 
 Fixpoint formula_free_vars (f: formula) : list string :=
     match f with
@@ -354,15 +554,10 @@ Fixpoint formula_free_vars (f: formula) : list string :=
   | Exists x f => List.remove string_dec x (formula_free_vars f)
   end.
 
-Lemma remove_In_diff: forall {A: Set} H
-                             (l: list A) (x x0: A), x <> x0 -> List.In x l -> List.In x (@List.remove _ H x0 l).
-  do 2 intro.
-  induction l; simpl; intros; auto.
-  inversion_clear H1.
-  subst x.
-  destruct (H x0 a); intuition.
-  destruct (H x0 a); intuition.
-Qed.
+(*
+  for all models with same valuation over free variables variable valuation,
+  semantics is preserved (the same)
+*)
 
 Lemma formula_vars_term_sem {V}:
   forall (f: formula) (m1 m2: @Model V),
@@ -644,31 +839,6 @@ Lemma lemma_exists x (p: formula):
 Qed.
 
 (* need to cleanup *)
-
-Fixpoint unzip (l: list (term * term)): list term * list term :=
-  match l with
-  | nil => (nil, nil)
-  | (hd1, hd2)::tl =>
-      let (tl1, tl2) := unzip tl in
-      (hd1::tl1, hd2::tl2)
-  end.
-
-Lemma unzip_fst_snd: forall l,
-    unzip l = (fst (unzip l), snd (unzip l)).
-  induction l; simpl; intros; auto.
-  rewrite IHl; simpl.
-  destruct a; simpl; auto.
-Qed.  
-  
-Lemma unzip_unfold: forall tl hd1 hd2,
-    unzip ((hd1, hd2)::tl) = (hd1::(fst (unzip tl)), hd2::(snd (unzip tl))).
-  induction tl.
-  intuition.
-  intros.
-  destruct a.
-  rewrite (IHtl t t0).
-  sauto.
-Qed.
   
 Lemma l1 (l: list( term * term)) {V} (m: @Model V):
     (forall x, In x l -> let (x1, x2) := x in eval m x1 = eval m x2) ->
@@ -780,15 +950,6 @@ Lemma build_conj_imp_equiv {V} (m: @Model V) (l: list formula) (ccl: formula):
   rewrite <- IHl.
   sauto.
 Qed.  
-(*
-Lemma build_conj_imp_equiv {V} (m: @Model V) (l: list (term * term)) (ccl: formula):
-  (m |= (formulas_conj (map (fun x => fst x == snd x) l)) ==> ccl) <-> (m |= formulas_imp (map (fun x => fst x == snd x) l) ccl).
-  induction l; simpl; intros; auto.  
-  sauto.
-  rewrite <- IHl.
-  sauto.
-Qed.  
- *)
 
 Lemma lemma_fun_congruence_aux f (l: list (term * term)):
   let (l1, l2) := unzip l in
@@ -1195,9 +1356,8 @@ Lemma truth: |- true.
         ).
 Qed.
 
-Inductive tuple: forall (l: list Prop), Type :=
-| tnil: tuple nil
-| tcons: forall {hd: Prop} (thd: hd) {tl: list Prop} (ttl: tuple tl), tuple (hd::tl).
+(* interesting *)
+Definition theorem_tuple (l: list formula) : Type := tuple (map (fun x => is_valid x) l).
 
 Lemma tuple_formulas_conj: forall
     (l: list formula)
@@ -1212,16 +1372,6 @@ Lemma tuple_formulas_conj: forall
   intuition.
 Qed.
 
-Lemma in_f_map:
-  forall {A B: Type} (f: A -> B) (l: list A) (x: A),
-    In x l ->
-    In (f x) (map f l).
-  induction l.
-  sauto.
-  sauto.
-Qed.
-
-(* interesting *)
 Lemma imp_trans_chain_aux :
   forall (l: list formula)
          {p} (Hs: tuple (map (fun x => is_valid x) (map (fun x => p ==> x) l)))
@@ -1304,10 +1454,16 @@ Lemma and_right p q: |- p //\\ q ==> q.
         ).
 Qed.
 
-
-(*
-Lemma conjths
- *)
+Lemma conjths {l: list formula}:
+  forall
+    p, In p l ->
+              |- (formulas_conj l) ==> p.
+  intros.
+  red; intros.
+  intro.
+  rewrite <- conj_forall_eq_m in H0.
+  sauto.
+Qed.
 
 Lemma and_pair p q: |- p ==> q ==> p //\\ q.
   generalize (iff_imp2 (lemma_and p q)); intro H1.
@@ -1327,7 +1483,7 @@ Lemma shunt {p q r} (H: |- p //\\ q ==> r): |- p ==> q ==> r.
         ).
 Qed.
 
-Lemma unshut {p q r} (H: |- p ==> q ==> r): |- p //\\ q ==> r.
+Lemma unshunt {p q r} (H: |- p ==> q ==> r): |- p //\\ q ==> r.
   
   generalize (tcons (and_left p q) (tcons (and_right p q) tnil)); intro.
   
@@ -1342,9 +1498,31 @@ Lemma unshut {p q r} (H: |- p ==> q ==> r): |- p //\\ q ==> r.
   auto.
 Qed.
 
-(******)
+(* p. 506 => tableau procedure *)
 
-(* p. 506 => tableau procedure ~~> Elpi*)
+Lemma iff_def p q: |- (p <=> q) <=> ((p ==> q) //\\ (q ==> p)).
+  assert (theorem_tuple [(p <=> q) ==> (p ==> q); (p <=> q) ==> (q ==> p)]).
+  eapply tcons.
+  apply (lemma_iffimp1 p q).
+  eapply tcons.
+  apply (lemma_iffimp2 p q).
+  apply tnil.
+  generalize (@imp_trans_chain [(p ==> q); (q ==> p)] (p <=> q) X ((p ==> q) //\\ (q ==> p))); intros.  
+  generalize (and_pair (p ==> q) (q ==> p)); intros.
+  generalize (unshunt (lemma_impiff p q)); intros.
+  apply imp_antisym.
+  apply H.
+  simpl.
+  apply H0.
+  apply H1.
+Qed.
+
+Check (lemma_true).
+Check (lemma_not).
+Check (lemma_and).
+Check (lemma_or).
+Check (iff_def).
+Check (lemma_exists).
 
 (*** interactive proof style ***)
 
@@ -1388,38 +1566,6 @@ we can remove the p_i
 
 *)
 
-Fixpoint remove_dec
-  {A: Type}
-  (A_dec: forall (x y: A), { x = y } + { x <> y })
-  (x: A)
-  (l: list A) :=
-  match l with
-  | nil => nil
-  | hd::tl =>
-      match A_dec x hd with
-      | left _ => remove_dec A_dec x tl
-      | right _ => hd::(remove_dec A_dec x tl)
-      end
-  end.
-
-Lemma remove_dec_in1 {A: Type} (A_dec: forall (x y: A), { x = y } + { x <> y }) (x: A):
-  forall (l: list A),
-  forall (e: A), In e (remove_dec A_dec x l) -> e <> x.
-  induction l; simpl; intros; auto.
-  destruct (A_dec x a).
-  sauto.
-  sauto.
-Qed.
-
-Lemma remove_dec_in2  {A: Type} (A_dec: forall (x y: A), { x = y } + { x <> y }) (x: A):
-  forall (l: list A),
-  forall (e: A), In e l -> e <>x -> In e (remove_dec A_dec x l).
-  induction l; simpl; intros; auto.
-  destruct (A_dec x a).
-  sauto.
-  sauto.
-Qed.
-
 Lemma solved_hypothesis {l: list formula} {ccl: formula} {p: formula}:
   forall
     (H: |- p)
@@ -1448,59 +1594,14 @@ Program Definition solve_hypothesis (g: goal) {p} (H: |- p): goal :=
   |}.
 
 (*  this is a generalization of above *)
+(*
+given
+|- p_0 -> ... -> p_i -> ... -> p_n -> g
+|- q_0 -> ... -> q_m -> p_i
 
-Fixpoint replace_dec
-  {A: Type}
-  (A_dec: forall (x y: A), { x = y } + { x <> y })
-  (e: A)
-  (r: list A)
-  (l: list A) :=
-  match l with
-  | nil => nil
-  | hd::tl =>
-      match A_dec hd e with
-      | left _ => r ++ replace_dec A_dec e r tl
-      | right _ => hd::(replace_dec A_dec e r tl)
-      end
-  end.
-
-Lemma replace_dec_eq {A: Type}
-  (A_dec: forall (x y: A), { x = y } + { x <> y })
-  (e: A)
-  (r: list A): forall (l: list A),
-    In e l -> incl r (replace_dec A_dec e r l).
-  induction l; simpl; intros; auto.
-  sauto.
-  inversion_clear H.
-  subst a.
-  destruct (A_dec e e).
-  apply incl_appl.
-  apply incl_refl.
-  sauto.
-  destruct (A_dec a e).
-  apply incl_appl.
-  apply incl_refl.
-  sauto.
-Qed.  
-
-Lemma replace_dec_neq {A: Type}
-  (A_dec: forall (x y: A), { x = y } + { x <> y })
-  (e: A)
-  (r: list A): forall (l: list A),
-    forall (x: A),
-    In x l -> x <> e -> In x (replace_dec A_dec e r l).
-  induction l; simpl; intros; auto.
-  inversion_clear H.
-  destruct (A_dec a e).
-  sauto.
-  subst a.
-  sauto.
-  destruct (A_dec a e).
-  subst a.
-  apply in_or_app.
-  sauto.
-  sauto.
-Qed.
+we can replace p_i by the q_0, ..., q_m
+|- p_0 -> ... -> q_0 -> ... -> q_m -> p_n -> g
+ *)
 
 Lemma formulas_conj_incl_m {V} (m: @Model V) (l1 l2: list formula):
   incl l1 l2 ->
@@ -1552,4 +1653,22 @@ Program Definition apply_to_goal (g: goal)
     justification := generalize_implication (justification g) H
   |}.
 
+(***********)
+
+Fixpoint funpow (n: nat) {A} (f: A -> A) (x: A): A :=
+  match n with
+  | 0 => x
+  | S n => funpow n f (f x)
+  end.
+
+(* in this formalization eq is a primitive *)
+Lemma eq_sym (s t: term): |- (s == t) ==> (t == s).
+  red; intros.
+  sauto.
+Qed.
+
+Lemma eq_trans (s t u: term): |- (s == t) ==> (t == u) ==> (s == u).
+  red; intros.
+  sauto.
+Qed.
 
