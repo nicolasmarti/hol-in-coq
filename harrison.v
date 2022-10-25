@@ -191,6 +191,12 @@ Lemma unzip_unfold {A B}: forall (tl: list (A * B)) hd1 hd2,
   sauto.
 Qed.
 
+Fixpoint funpow (n: nat) {A} (f: A -> A) (x: A): A :=
+  match n with
+  | 0 => x
+  | S n => funpow n f (f x)
+  end.
+
 (*****************************************)
 
 (* 
@@ -1498,6 +1504,18 @@ Lemma unshunt {p q r} (H: |- p ==> q ==> r): |- p //\\ q ==> r.
   auto.
 Qed.
 
+
+(* FOL lemmas *)
+Lemma eq_sym (s t: term): |- (s == t) ==> (t == s).
+  red; intros.
+  sauto.
+Qed.
+
+Lemma eq_trans (s t u: term): |- (s == t) ==> (t == u) ==> (s == u).
+  red; intros.
+  sauto.
+Qed.
+
 (* p. 506 => tableau procedure *)
 
 Lemma iff_def p q: |- (p <=> q) <=> ((p ==> q) //\\ (q ==> p)).
@@ -1517,12 +1535,32 @@ Lemma iff_def p q: |- (p <=> q) <=> ((p ==> q) //\\ (q ==> p)).
   apply H1.
 Qed.
 
-Check (lemma_true).
+Definition iff_refl (p: formula): |- p <=> p.
+  red; intros; sauto.
+Qed.
+
+(***)
+
 Check (lemma_not).
+Check (lemma_true).
 Check (lemma_and).
 Check (lemma_or).
 Check (iff_def).
 Check (lemma_exists).
+
+Check exist.
+
+(* looks like this is a corner case for program ... *)
+(*
+Program Definition expand_connective (f: formula) : { fm: formula | |- f <=> fm } :=
+  match f with
+  | true => @exist formula (fun x => |- true <=> x) (false ==> false) lemma_true
+
+  | ~~ p => @exist formula (fun x => |- ~~p <=> x) (p ==> false) (lemma_not p)
+
+  | p => @exist formula (fun x => |- p <=> x) p (iff_refl p)
+  end.
+*)
 
 (*** interactive proof style ***)
 
@@ -1654,21 +1692,4 @@ Program Definition apply_to_goal (g: goal)
   |}.
 
 (***********)
-
-Fixpoint funpow (n: nat) {A} (f: A -> A) (x: A): A :=
-  match n with
-  | 0 => x
-  | S n => funpow n f (f x)
-  end.
-
-(* in this formalization eq is a primitive *)
-Lemma eq_sym (s t: term): |- (s == t) ==> (t == s).
-  red; intros.
-  sauto.
-Qed.
-
-Lemma eq_trans (s t u: term): |- (s == t) ==> (t == u) ==> (s == u).
-  red; intros.
-  sauto.
-Qed.
 
