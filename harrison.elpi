@@ -1,0 +1,25 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% test for command 
+
+%%% entry point
+% pred main i: list argument
+
+main [str Src, str "=>", str Tgt, str "/", str F] :- !,
+coq.say "cmd" Src "=>" Tgt "/" F.
+
+main [trm T] :-
+std.assert-ok! (coq.elaborate-skeleton T Ty T1) "argument illtyped",
+coq.say "The type of" T "is" Ty.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% test for command
+% pred show_goal i: goal
+show_goal (goal Ctxt Trigger Type Proof Args as G) :-
+coq.say Ctx "|-" Proof ":" Type,
+coq.say B x. 
+
+%%% entry point
+% pred solve i:goal o: list sealed-goal
+
+solve (goal Ctxt Trigger Type Proof B as G) GL :-
+show_goal G.
