@@ -1,3 +1,36 @@
+(*
+interesting points (for me ...):
+
+- original goal: verifying the fol lcf minimal kernel from Harrison' book [Handbook of Practical Logic and Automated Reasoning]
+  => possibility of extracting a certified Ocaml module for lcf kernel
+  => implementing decision procedure inside Coq using elpi/ltac
+  => testing a few Coq tools (e.g., coq-hammer)
+
+- non structural recursive definition of term
+  => require to redefine the induction principle (based on Program/measure)
+  => rewriting lemmas on induction for each constructor
+
+- design based on the satifiability of formula (|- f) defined as satifiability over any model (V m, m |= f)
+
+- having an verified & extracted Ocaml module require to have a dependent type bearing both the formula and its proof (i.e. a type for the set of provable formula). Otherwise, extracting a function/lemma based purely on (|-) leads to empty Ocaml code [please c.f. illustrating extration of modusponens and modusponens_thm]
+
+- in Harrison, equality is defined using the Predicate constructor. Here we define a special formula constructor. Rational is
+  ==> there is not restriction on arity of predicate, while clearly one on equality
+  ==> if defined as a predicate, one need more hypothesis on the notion of model [i.e., the semantics of the predicate "="]
+  ==> equality is somehow a primitive, which can appear in basic inference rule (e.g., superposition)
+  The counterpart is that one need to add some extra symbol (harrison only need refl): for now only commutativity and transitivity are considered
+
+*)
+
+(*
+TODO:
+- add the axiom eqcomm & eqtrans to the kernel [requierement as eq has its own constructor]
+- use case for elpi/ltac ~~> Thm from/to (|- p)
+- add interesting point [at least for me] in preambul
+*)
+
+
+Require Import Bool.
 Require Import Nat.
 Require Import Peano_dec.
 Require Import List.
@@ -6,15 +39,22 @@ Require Import String.
 Require Import Lia.
 From Hammer Require Import Tactics.
 
-(* optional *)
+(* optional [not used so far ...] *)
+(*
 From Hammer Require Import Hammer.
 Set Hammer GSMode 2.
+*)
 (**)
 
 Require Import Coq.Program.Wf.
 
 Open Scope string_scope.
 Open Scope list_scope.
+
+
+Require Import Coq.extraction.ExtrOcamlString.
+Require Import Coq.extraction.ExtrOcamlBasic.
+Require Import ExtrOcamlNatBigInt.
 
 (**** some general helper lemmas ******)
 (*
@@ -164,7 +204,15 @@ Lemma replace_dec_neq {A: Type}
 Qed.
 
 (**)
-
+Fixpoint zip {A B} (l1: list A) (l2: list B): list (A * B) :=
+  match l1 with
+  | nil => nil
+  | hd1::tl1 =>
+      match l2 with
+      | nil => nil
+      | hd2::tl2 => (hd1, hd2)::(zip tl1 tl2)
+      end
+  end.
 
 Fixpoint unzip {A B} (l: list (A * B)): list A * list B :=
   match l with
@@ -475,8 +523,8 @@ Qed.
 *)
 
 Inductive formula: Set :=
-| true: formula
-| false: formula
+| ftrue: formula
+| ffalse: formula
 | Atom: string -> list term -> formula
 | Eq: term -> term -> formula
 | Not: formula -> formula
@@ -512,8 +560,8 @@ Defined.
 
 Fixpoint models {V} (m: @Model V) (f: formula): Prop :=
   match f with
-  | true => True
-  | false => False
+  | ftrue => True
+  | ffalse => False
   | Atom P args => pred_sem m P (map (eval m) args)
   | Eq t1 t2 => eval m t1 = eval m t2
   | Not f => ~ models m f
@@ -547,8 +595,8 @@ Axiom models_classical:
 
 Fixpoint formula_free_vars (f: formula) : list string :=
     match f with
-  | true => nil
-  | false => nil
+  | ftrue => nil
+  | ffalse => nil
   | Atom P args => List.concat (map term_free_vars args)
   | Eq t1 t2 => term_free_vars t1 ++ term_free_vars t2
   | Not f => formula_free_vars f
@@ -664,11 +712,110 @@ apply remove_In_diff; auto.
 Qed.
 
 
+(* definition of validity: all models satisfy the formula *)
+
 Definition is_valid (f: formula) : Prop :=
   forall {V} (m: @Model V),
     m |= f.
 
 Notation "'|-' f" := (is_valid f) (at level 150, right associativity).
+
+(*********************************)
+
+(*** Module for Ocaml extraction  ***)
+
+Module Type ProofSystem.
+
+  Parameter Thm: Set.
+  Parameter concl: Thm -> formula.
+           
+  (*  if |- p ==> q and |- p then |- q                                         *)
+  Parameter modusponens: Thm -> Thm -> Thm.
+
+  (*  if |- p then |- forall x. p                                              *)
+  Parameter gen: string -> Thm -> Thm.
+  
+  (*  |- p ==> (q ==> p)                                                       *)
+  Parameter axiom_addimp: formula -> formula -> Thm.
+  
+  (*  |- (p ==> q ==> r) ==> (p ==> q) ==> (p ==> r)                           *)
+  Parameter axiom_distribimp: formula -> formula -> formula -> Thm.
+  
+  (*  |- ((p ==> false) ==> false) ==> p                                       *)
+  Parameter axiom_doubleneg: formula -> Thm.
+  
+  (*  |- (forall x. p ==> q) ==> (forall x. p) ==> (forall x. q)               *)
+  Parameter axiom_allimp: string -> formula -> formula -> Thm.
+    
+  (*  |- p ==> forall x. p                            [x not free in p]        *)
+  Parameter axiom_impall: string -> formula -> Thm.
+  
+  (*  |- exists x. x = t                              [x not free in t]        *)
+  Parameter axiom_existseq: string -> term -> Thm.
+
+  (*  |- t = t                                                                 *)
+  Parameter axiom_eqrefl: term -> Thm.
+  
+  (*  |- s1 = t1 ==> ... ==> sn = tn ==> f(s1,..,sn) = f(t1,..,tn)             *)
+  Parameter axiom_funcong: string -> list term -> list term -> Thm.
+  
+  (*  |- s1 = t1 ==> ... ==> sn = tn ==> P(s1,..,sn) ==> P(t1,..,tn)           *)
+  Parameter axiom_predcong: string -> list term -> list term -> Thm.
+  
+  (*  |- (p <=> q) ==> p ==> q                                                 *)
+  Parameter axiom_iffimp1: formula -> formula -> Thm.
+  
+  (*  |- (p <=> q) ==> q ==> p                                                 *)
+  Parameter axiom_iffimp2: formula -> formula -> Thm.
+
+  (*  |- (p ==> q) ==> (q ==> p) ==> (p <=> q)                                 *)
+  Parameter axiom_impiff: formula -> formula -> Thm.
+
+  (*  |- true <=> (false ==> false)                                            *)
+  Parameter axiom_true: Thm.
+  
+  (*  |- ~p <=> (p ==> false)                                                  *)
+  Parameter axiom_not: formula -> Thm.
+  
+  (*  |- p /\ q <=> (p ==> q ==> false) ==> false                              *)
+  Parameter axiom_and: formula -> formula -> Thm.
+  
+  (*  |- p \/ q <=> ~(~p /\ ~q)                                                *)
+  Parameter axiom_or: formula -> formula -> Thm.
+
+  (*  |- (exists x. p) <=> ~(forall x. ~p)                                     *)
+  Parameter axiom_exists: string -> formula -> Thm.
+
+End ProofSystem.
+
+(* we defined those outside because we will reuse them later *)
+Definition Thm := { f: formula | |- f }.
+
+Definition concl (thm: Thm): formula :=
+  match thm with
+  | exist _ x _ => x
+  end.
+
+Definition prf (thm: Thm): |- concl thm :=
+    match thm with
+    | exist _ _ p => p
+    end.
+
+Definition mkThm f prf: Thm := exist is_valid f prf .
+
+Definition mkThm2 {f} ( prf: |- f ) : Thm := exist is_valid f prf .
+
+Program Definition T_Thm := exist is_valid ftrue _.
+Next Obligation.
+  sauto.
+Qed.
+
+(** all the lemmas to be used in the implementation **)
+(** comming in two flavors
+1) with  (|- f) goals / hypothesis
+2) with Thm dependent type hiding the conclusion (using 1)
+
+**)
 
 Lemma modusponens {p q: formula}:
   forall (A: |- p ==> q)
@@ -682,6 +829,31 @@ Lemma modusponens {p q: formula}:
   auto.
 Qed.
 
+Extraction "test1.ml" modusponens.
+
+Program Definition modusponens_thm (thm1 thm2: Thm): Thm :=
+  match concl thm1 with
+  | Imp f1 f2 =>
+      match formula_dec f1 thm2 with
+      | left _ => (**) mkThm f2 _
+      | right _ => T_Thm
+      end
+  | _ => T_Thm
+  end.
+Next Obligation.
+  destruct thm1; destruct thm2.
+  eapply modusponens.
+  simpl in Heq_anonymous0.
+  subst x.
+  apply i.
+  apply i0.
+Qed.
+
+Extraction "test2.ml" modusponens_thm.
+
+
+(**)
+
 Lemma lemma_gen {p: formula}:
   forall (H: |- p) x,
     (|- Forall x p).
@@ -691,6 +863,10 @@ Lemma lemma_gen {p: formula}:
   apply H.
 Qed.
 
+Definition gen_thm (x: string) (thm: Thm): Thm := mkThm _ (lemma_gen (prf thm) x).
+
+(**)
+
 Lemma lemma_addimp (p q: formula):
   |- p ==> (q ==> p).
   red.
@@ -699,6 +875,10 @@ Lemma lemma_addimp (p q: formula):
   intro.
   auto.
 Qed.
+
+Program Definition addimp_thm (p q: formula): Thm := mkThm _ (lemma_addimp p q).
+
+(**)
 
 Lemma lemma_distribimp (p q r: formula):
       |- (p ==> q ==> r) ==> (p ==> q) ==> (p ==> r).
@@ -712,13 +892,23 @@ Lemma lemma_distribimp (p q r: formula):
   apply H1.
 Qed.
 
+Program Definition distribimp_thm (p q r: formula): Thm :=
+  mkThm _ (lemma_distribimp p q r).
+
+(**)
+
 Lemma lemma_doubleneg (p : formula):
-      |- ((p ==> false) ==> false) ==> p.
+      |- ((p ==> ffalse) ==> ffalse) ==> p.
   red; intros.
   intro.
   destruct (models_classical m p); auto.
   generalize (H H0); intros; intuition.
 Qed.
+
+Program Definition doubleneg_thm (p: formula): Thm :=
+  mkThm _ (lemma_doubleneg p).
+
+(**)
 
 Lemma lemma_allimp x (p q: formula) :
   |- (F x, p ==> q) ==> (F x, p) ==> (F x, q).
@@ -729,6 +919,11 @@ Lemma lemma_allimp x (p q: formula) :
   apply H.
   apply H0.
 Qed.
+
+Program Definition allimp_thm (x: string) (p q: formula): Thm :=
+  mkThm _ (lemma_allimp x p q).
+
+(**)
 
 Lemma lemma_impall x (p: formula):
   ~ In x (formula_free_vars p) ->
@@ -744,6 +939,14 @@ Lemma lemma_impall x (p: formula):
   rewrite updated_model_var_sem1; auto.
 Qed.
 
+Program Definition impall_thm (x: string) (p: formula): Thm :=
+  match List.in_dec string_dec x (formula_free_vars p) with
+  | left _ => T_Thm
+  | right _ => mkThm _ (lemma_impall x p _)
+  end.
+
+(**)
+
 Lemma lemma_existseq x (t: term):
   ~ In x (term_free_vars t) ->
       |- Exists x (var x == t).
@@ -757,11 +960,24 @@ Lemma lemma_existseq x (t: term):
   intro; subst x; intuition.
 Qed.
 
+Program Definition existseq_thm (x: string) (t: term) : Thm :=
+  match List.in_dec string_dec x (term_free_vars t) with
+  | left _ => T_Thm
+  | right _ => mkThm _ (lemma_existseq x t _)
+  end.
+
+(**)
+
 Lemma lemma_eqrefl (t: term):
   |- t == t.
   red; intros.
   red; auto.
 Qed.
+
+Program Definition eqrefl_thm (t: term): Thm :=
+  mkThm _ (lemma_eqrefl t).    
+
+(**)
 
 Lemma lemma_iffimp1 (p q: formula):
       |- (p <=> q) ==> p ==> q.
@@ -771,6 +987,11 @@ Lemma lemma_iffimp1 (p q: formula):
   intuition.
 Qed.
 
+Program Definition  iffimp1_thm (p q: formula) : Thm :=
+  mkThm _ (lemma_iffimp1 p q).
+
+(**)
+
 Lemma lemma_iffimp2 (p q: formula):
       |- (p <=> q) ==> q ==> p.
   red; intros.
@@ -778,6 +999,11 @@ Lemma lemma_iffimp2 (p q: formula):
   inversion_clear H.  
   intuition.
 Qed.
+
+Program Definition iffimp2_thm (p q: formula) : Thm :=
+  mkThm _ (lemma_iffimp2 p q).
+
+(**)
 
 Lemma lemma_impiff (p q: formula):
       |- (p ==> q) ==> (q ==> p) ==> (p <=> q).
@@ -787,22 +1013,37 @@ Lemma lemma_impiff (p q: formula):
   split; intuition.
 Qed.  
 
+Program Definition impiff_thm (p q: formula) : Thm :=
+  mkThm _ (lemma_impiff p q).
+
+(**)
+
 Lemma lemma_true:
-      |- true <=> (false ==> false).
+      |- ftrue <=> (ffalse ==> ffalse).
   red; intros.
   split; intro.
   intro; intuition.
   red; auto.
 Qed.
 
+Program Definition true_thm: Thm :=
+  mkThm _ lemma_true.
+
+(**)
+
 Lemma lemma_not (p: formula):
-      |- ~~ p <=> (p ==> false) .
+      |- ~~ p <=> (p ==> ffalse) .
   red; intros.
   split; intros; intuition.
 Qed.
 
+Program Definition not_thm (p: formula): Thm := 
+  mkThm _ (lemma_not p).
+
+(**)
+
 Lemma lemma_and (p q: formula):
-      |- p //\\ q <=> (p ==> q ==> false) ==> false.
+      |- p //\\ q <=> (p ==> q ==> ffalse) ==> ffalse.
   red; intros.
   split; intuition.
   inversion_clear H.
@@ -815,7 +1056,12 @@ Lemma lemma_and (p q: formula):
   apply H0.
   split; intuition.
 Qed.
-  
+
+Program Definition and_thm (p q: formula): Thm :=
+  mkThm _ (lemma_and p q).
+
+(**)
+
 Lemma lemma_or (p q: formula):
       |- p \\// q <=> ~~(~~ p //\\ ~~ q).
   split; intros.
@@ -830,6 +1076,11 @@ Lemma lemma_or (p q: formula):
   right; intuition.
 Qed.  
 
+Program Definition or_thm (p q: formula): Thm := 
+  mkThm _ (lemma_or p q).
+
+(**)
+
 Lemma lemma_exists x (p: formula):
       |- (E x, p) <=> ~~(F x, ~~p).
   red; intros.
@@ -843,6 +1094,9 @@ Lemma lemma_exists x (p: formula):
   apply H.
   sauto.
 Qed.
+
+Program Definition exists_thm (x: string) (p: formula): Thm := 
+  mkThm _ (lemma_exists x p).
 
 (* need to cleanup *)
   
@@ -905,7 +1159,7 @@ Qed.
 
 Fixpoint formulas_conj (l: list formula) : formula :=
   match l with
-  | nil => true
+  | nil => ftrue
   | hd::tl => hd //\\ formulas_conj tl
   end.
 
@@ -997,6 +1251,11 @@ Lemma lemma_funcong f (l: list (term * term)):
   sauto.
 Qed.
 
+Program Definition funcong_thm (f: string) (lhs rhs: list term) : Thm :=
+  mkThm _ (lemma_funcong f (zip lhs rhs)).
+
+(**)
+
 Lemma lemma_predcong_ P (l: list (term * term)):
   let (l1, l2) := unzip l in
   |- formulas_imp (map (fun x => fst x == snd x) l) (Atom P l1 ==> Atom P l2).
@@ -1023,213 +1282,94 @@ Lemma lemma_predcong P (l: list (term * term)):
   sauto.
 Qed.
 
-(*** Module for Ocaml extraction  ***)
-
-Module Type ProofSystem.
-
-  Parameter Thm: Set.
-  Parameter concl: Thm -> formula.
-           
-  (*  if |- p ==> q and |- p then |- q                                         *)
-  Parameter modus_ponens: Thm -> Thm -> Thm.
-
-  (*  if |- p then |- forall x. p                                              *)
-  Parameter gen: string -> Thm -> Thm.
+Program Definition predcong_thm (P: string) (lhs rhs: list term) : Thm :=
+    mkThm _ (lemma_predcong P (zip lhs rhs)).
   
-  (*  |- p ==> (q ==> p)                                                       *)
-  Parameter axiom_addimp: formula -> formula -> Thm.
+(** first in the module to be dump in OCaml **)
   
-  (*  |- (p ==> q ==> r) ==> (p ==> q) ==> (p ==> r)                           *)
-  Parameter axiom_distribimp: formula -> formula -> formula -> Thm.
-  
-  (*  |- ((p ==> false) ==> false) ==> p                                       *)
-  Parameter axiom_doubleneg: formula -> Thm.
-  
-  (*  |- (forall x. p ==> q) ==> (forall x. p) ==> (forall x. q)               *)
-  Parameter axiom_allimp: string -> formula -> formula -> Thm.
-    
-  (*  |- p ==> forall x. p                            [x not free in p]        *)
-  Parameter axiom_impall: string -> formula -> Thm.
-  
-  (*  |- exists x. x = t                              [x not free in t]        *)
-  Parameter axiom_existseq: string -> term -> Thm.
-
-  (*  |- t = t                                                                 *)
-  Parameter axiom_eqrefl: term -> Thm.
-  
-  (*  |- s1 = t1 ==> ... ==> sn = tn ==> f(s1,..,sn) = f(t1,..,tn)             *)
-  Parameter axiom_funcong: string -> list term -> list term -> Thm.
-  
-  (*  |- s1 = t1 ==> ... ==> sn = tn ==> P(s1,..,sn) ==> P(t1,..,tn)           *)
-  Parameter axiom_predcong: string -> list term -> list term -> Thm.
-  
-  (*  |- (p <=> q) ==> p ==> q                                                 *)
-  Parameter axiom_iffimp1: formula -> formula -> Thm.
-  
-  (*  |- (p <=> q) ==> q ==> p                                                 *)
-  Parameter axiom_iffimp2: formula -> formula -> Thm.
-
-  (*  |- (p ==> q) ==> (q ==> p) ==> (p <=> q)                                 *)
-  Parameter axiom_impiff: formula -> formula -> Thm.
-
-  (*  |- true <=> (false ==> false)                                            *)
-  Parameter axiom_true: Thm.
-  
-  (*  |- ~p <=> (p ==> false)                                                  *)
-  Parameter axiom_not: formula -> Thm.
-  
-  (*  |- p /\ q <=> (p ==> q ==> false) ==> false                              *)
-  Parameter axiom_and: formula -> formula -> Thm.
-  
-  (*  |- p \/ q <=> ~(~p /\ ~q)                                                *)
-  Parameter axiom_or: formula -> formula -> Thm.
-
-  (*  |- (exists x. p) <=> ~(forall x. ~p)                                     *)
-  Parameter axiom_exists: string -> formula -> Thm.
-
-End ProofSystem.
-
 Module Proven: ProofSystem.
 
-  Definition Thm := { f: formula | |- f }.
+  Definition Thm := Thm.
 
+  Print Thm.
+  
   Print exist.
 
   Check exist.
   
-  Definition concl (thm: Thm): formula :=
-    match thm with
-    | exist _ x _ => x
-    end.
-
-  Definition prf (thm: Thm): |- concl thm :=
-    match thm with
-    | exist _ _ p => p
-    end.
+  Definition concl (thm: Thm): formula := concl thm.
   
-  Program Definition T_Thm := exist is_valid true _.
-  Next Obligation.
-    sauto.
-  Qed.
+  Definition prf (thm: Thm): |- concl thm := prf thm.
 
-  Definition mkThm f prf: Thm := exist is_valid f prf .
+  Definition mkThm f prf: Thm := mkThm f prf.
+  
+  Definition T_Thm := T_Thm.
   
   (*  if |- p ==> q and |- p then |- q                                         *)
-  Program Definition modus_ponens (thm1 thm2: Thm): Thm :=
-    match concl thm1 with
-    | Imp f1 f2 =>
-      match formula_dec f1 thm2 with
-      | left _ => (**) mkThm f2 _
-      | right _ => T_Thm
-      end
-    | _ => T_Thm
-    end.
-  Next Obligation.
-    destruct thm1; destruct thm2.
-    eapply modusponens.
-    simpl in Heq_anonymous0.
-    subst x.
-    apply i.
-    apply i0.
-  Qed.
-    
+  Definition modusponens (thm1 thm2: Thm): Thm := modusponens_thm thm1 thm2.    
   (*  if |- p then |- forall x. p                                              *)
-  Program Definition gen (x: string) (thm: Thm): Thm := mkThm _ (lemma_gen (prf thm) x).
+  Definition gen (x: string) (thm: Thm): Thm := gen_thm x thm.
   
   (*  |- p ==> (q ==> p)                                                       *)
-  Program Definition axiom_addimp (p q: formula): Thm := mkThm _ (lemma_addimp p q).
+  Definition axiom_addimp (p q: formula): Thm := addimp_thm p q.
     
   (*  |- (p ==> q ==> r) ==> (p ==> q) ==> (p ==> r)                           *)
-  Program Definition axiom_distribimp (p q r: formula): Thm :=
-    mkThm _ (lemma_distribimp p q r).
+  Definition axiom_distribimp (p q r: formula): Thm := distribimp_thm p q r.
   
   (*  |- ((p ==> false) ==> false) ==> p                                       *)
-  Program Definition axiom_doubleneg (p: formula): Thm :=
-    mkThm _ (lemma_doubleneg p).
+  Definition axiom_doubleneg (p: formula): Thm := doubleneg_thm p.
   
   (*  |- (forall x. p ==> q) ==> (forall x. p) ==> (forall x. q)               *)
-  Program Definition axiom_allimp (x: string) (p q: formula): Thm :=
-    mkThm _ (lemma_allimp x p q).
+  Definition axiom_allimp (x: string) (p q: formula): Thm := allimp_thm x p q.
     
   (*  |- p ==> forall x. p                            [x not free in p]        *)
-  Program Definition axiom_impall (x: string) (p: formula): Thm :=
-    match List.in_dec string_dec x (formula_free_vars p) with
-    | left _ => T_Thm
-    | right _ => mkThm _ (lemma_impall x p _)
-    end.
+  Definition axiom_impall (x: string) (p: formula): Thm := impall_thm x p.
    
                                                                      
   (*  |- exists x. x = t                              [x not free in t]        *)
-  Program Definition axiom_existseq (x: string) (t: term) : Thm :=
-    match List.in_dec string_dec x (term_free_vars t) with
-    | left _ => T_Thm
-    | right _ => mkThm _ (lemma_existseq x t _)
-    end.
+  Definition axiom_existseq (x: string) (t: term) : Thm := existseq_thm x t.
   
   (*  |- t = t                                                                 *)
-  Program Definition axiom_eqrefl (t: term): Thm :=
-    mkThm _ (lemma_eqrefl t).    
+  Definition axiom_eqrefl (t: term): Thm := eqrefl_thm t.
   
   (*  |- s1 = t1 ==> ... ==> sn = tn ==> f(s1,..,sn) = f(t1,..,tn)             *)
-  Fixpoint zip (l1 l2: list term): list (term * term) :=
-    match l1 with
-    | nil => nil
-    | hd1::tl1 =>
-        match l2 with
-        | nil => nil
-        | hd2::tl2 => (hd1, hd2)::(zip tl1 tl2)
-        end
-    end.
   
-  Program Definition axiom_funcong (f: string) (lhs rhs: list term) : Thm :=
-    mkThm _ (lemma_funcong f (zip lhs rhs)).
+  Definition axiom_funcong (f: string) (lhs rhs: list term) : Thm := funcong_thm f lhs rhs.
     
   (*  |- s1 = t1 ==> ... ==> sn = tn ==> P(s1,..,sn) ==> P(t1,..,tn)           *)
-  Program Definition axiom_predcong (P: string) (lhs rhs: list term) : Thm :=
-    mkThm _ (lemma_predcong P (zip lhs rhs)).
+  Definition axiom_predcong (P: string) (lhs rhs: list term) : Thm := predcong_thm P lhs rhs.
     
   (*  |- (p <=> q) ==> p ==> q                                                 *)
-  Program Definition  axiom_iffimp1 (p q: formula) : Thm :=
-    mkThm _ (lemma_iffimp1 p q).
+  Definition axiom_iffimp1 (p q: formula) : Thm := iffimp1_thm p q.
   
   (*  |- (p <=> q) ==> q ==> p                                                 *)
-  Program Definition axiom_iffimp2 (p q: formula) : Thm :=
-    mkThm _ (lemma_iffimp2 p q).
+  Definition axiom_iffimp2 (p q: formula) : Thm := iffimp2_thm p q.
     
   (*  |- (p ==> q) ==> (q ==> p) ==> (p <=> q)                                 *)
-  Program Definition axiom_impiff (p q: formula) : Thm :=
-    mkThm _ (lemma_impiff p q).
+  Definition axiom_impiff (p q: formula) : Thm := impiff_thm p q.
   
   (*  |- true <=> (false ==> false)                                            *)
-  Program Definition axiom_true: Thm :=
-    mkThm _ lemma_true.
+  Definition axiom_true: Thm := true_thm.
   
   (*  |- ~p <=> (p ==> false)                                                  *)
-  Program Definition axiom_not (p: formula): Thm := 
-    mkThm _ (lemma_not p).
+  Definition axiom_not (p: formula): Thm := not_thm p.
   
   (*  |- p /\ q <=> (p ==> q ==> false) ==> false                              *)
-  Program Definition axiom_and (p q: formula): Thm :=
-    mkThm _ (lemma_and p q).
+  Definition axiom_and (p q: formula): Thm := and_thm p q.
 
   (*  |- p \/ q <=> ~(~p /\ ~q)                                                *)
-  Program Definition axiom_or (p q: formula): Thm := 
-    mkThm _ (lemma_or p q).
+  Definition axiom_or (p q: formula): Thm := or_thm p q.
   
   (*  |- (exists x. p) <=> ~(forall x. ~p)                                     *)
-  Program Definition axiom_exists (x: string) (p: formula): Thm := 
-    mkThm _ (lemma_exists x p).
+  Definition axiom_exists (x: string) (p: formula): Thm := exists_thm x p.
   
 End Proven.
 
 
-Require Import Coq.extraction.ExtrOcamlString.
-Require Import Coq.extraction.ExtrOcamlBasic.
-Require Import ExtrOcamlNatBigInt.
-
 Extraction "harrison.ml" Proven.
 
-(**  **)
+(******* further propositional lemmas *********)
+
 Lemma imp_refl p: |- p ==> p.
   generalize (lemma_distribimp p (p ==> p) p); intros.
   generalize (lemma_addimp p (p ==> p)); intros.
@@ -1332,15 +1472,15 @@ Lemma imp_antisym {p q} (H0: |- p ==> q) (H1: |- q ==> p): |- p <=> q.
         ).
 Qed.
 
-Lemma right_doubleneg {p q} (H: |- p ==> (q ==> false) ==> false ): |- p ==> q.
+Lemma right_doubleneg {p q} (H: |- p ==> (q ==> ffalse) ==> ffalse ): |- p ==> q.
   generalize (lemma_doubleneg q); intro.
   generalize (imp_trans H H0); intro.
   apply H1.
 Qed.
 
-Lemma ex_falso p: |- false ==> p.
+Lemma ex_falso p: |- ffalse ==> p.
   apply (right_doubleneg
-           (lemma_addimp false (p ==> false))
+           (lemma_addimp ffalse (p ==> ffalse))
         ).
 Qed.
 
@@ -1355,10 +1495,10 @@ Lemma imp_trans2 {p q r s} (H0: |- p ==> q ==> r) (H1: |- r ==> s): |- p ==> q =
   apply (modusponens H H0).
 Qed.
 
-Lemma truth: |- true.
+Lemma truth: |- ftrue.
   apply (modusponens
            (iff_imp2 lemma_true)
-           (imp_refl false)
+           (imp_refl ffalse)
         ).
 Qed.
 
@@ -1416,13 +1556,13 @@ Lemma imp_trans_chain :
   auto.
 Qed.
 
-Lemma imp_truefalse p q: |- (q ==> false) ==> p ==> (p ==> q) ==> false.
+Lemma imp_truefalse p q: |- (q ==> ffalse) ==> p ==> (p ==> q) ==> ffalse.
   apply ( imp_trans
-            (imp_trans_th p q false)
+            (imp_trans_th p q ffalse)
             (imp_swap_th
                (p ==> q)
                p
-               false
+               ffalse
             )
         ).
 Qed.
@@ -1439,21 +1579,21 @@ Lemma contrapos {p q} (H: |- p ==> q): |- ~~ q ==> ~~ p.
   apply (imp_trans
            (imp_trans
               (iff_imp1 (lemma_not q))
-              (imp_add_concl false H)
+              (imp_add_concl ffalse H)
            )
            (iff_imp2 (lemma_not p))
     ).
 Qed.
 
 Lemma and_left p q: |- p //\\ q ==> p.
-  generalize (imp_add_assum p (lemma_addimp false q)); intro H1.
-  generalize (right_doubleneg (imp_add_concl false H1)); intro H2.
+  generalize (imp_add_assum p (lemma_addimp ffalse q)); intro H1.
+  generalize (right_doubleneg (imp_add_concl ffalse H1)); intro H2.
   apply (imp_trans (iff_imp1 (lemma_and p q)) H2).
 Qed.
 
 Lemma and_right p q: |- p //\\ q ==> q.
-  generalize (lemma_addimp (q ==> false) p); intro H1.
-  generalize (right_doubleneg (imp_add_concl false H1)); intro H2.
+  generalize (lemma_addimp (q ==> ffalse) p); intro H1.
+  generalize (right_doubleneg (imp_add_concl ffalse H1)); intro H2.
   apply (imp_trans
            (iff_imp1 (lemma_and p q))
            H2
@@ -1473,11 +1613,11 @@ Qed.
 
 Lemma and_pair p q: |- p ==> q ==> p //\\ q.
   generalize (iff_imp2 (lemma_and p q)); intro H1.
-  generalize (imp_swap_th (p ==> q ==> false) q false); intro H2.
+  generalize (imp_swap_th (p ==> q ==> ffalse) q ffalse); intro H2.
   generalize (imp_add_assum p (imp_trans2 H2 H1)); intro H3.
   apply (modusponens
            H3
-           (imp_swap (imp_refl (p ==> q ==> false)))
+           (imp_swap (imp_refl (p ==> q ==> ffalse)))
         ).
 Qed.
 
@@ -1504,6 +1644,7 @@ Lemma unshunt {p q r} (H: |- p ==> q ==> r): |- p //\\ q ==> r.
   auto.
 Qed.
 
+(******* FOL lemmas *************)
 
 (* FOL lemmas *)
 Lemma eq_sym (s t: term): |- (s == t) ==> (t == s).
@@ -1516,7 +1657,9 @@ Lemma eq_trans (s t u: term): |- (s == t) ==> (t == u) ==> (s == u).
   sauto.
 Qed.
 
-(* p. 506 => tableau procedure *)
+(*to continue*)
+
+(****** p. 506 => tableau procedure ********)
 
 Lemma iff_def p q: |- (p <=> q) <=> ((p ==> q) //\\ (q ==> p)).
   assert (theorem_tuple [(p <=> q) ==> (p ==> q); (p <=> q) ==> (q ==> p)]).
@@ -1539,16 +1682,9 @@ Definition iff_refl (p: formula): |- p <=> p.
   red; intros; sauto.
 Qed.
 
+
+
 (***)
-
-Check (lemma_not).
-Check (lemma_true).
-Check (lemma_and).
-Check (lemma_or).
-Check (iff_def).
-Check (lemma_exists).
-
-Check exist.
 
 (* looks like this is a corner case for program ... *)
 (*
@@ -1561,6 +1697,106 @@ Program Definition expand_connective (f: formula) : { fm: formula | |- f <=> fm 
   | p => @exist formula (fun x => |- p <=> x) p (iff_refl p)
   end.
 *)
+
+Definition expand_connective (f: formula): Thm :=
+  match f with
+  | ftrue => mkThm _ lemma_true
+  | ~~ p => mkThm _ (lemma_not p)
+  | p //\\ q => mkThm _ (lemma_and p q)
+  | p \\// q => mkThm _ (lemma_or p q)
+  | p <=> q => mkThm _ (iff_def p q)
+  | E x, p => mkThm _ (lemma_exists x p)
+  | _ => T_Thm
+  end.
+
+Definition negatef (f: formula): formula :=
+  match f with
+  | p ==> ffalse => p
+  | p => p ==> ffalse
+  end.
+
+Check bool.
+Check (true:bool).
+
+Print bool.
+
+Definition negativef (f: formula): bool :=
+  match f with
+  | p ==> ffalse => true
+  | p => false
+  end.
+
+(*
+  definition to perform transformation: thm <-> |- p
+*)
+Program Definition prfthm_2 {p q} (H: (|- p) -> |- q) (thm: Thm): Thm :=
+  match formula_dec p (concl thm) with
+  | left Heq => mkThm q (H _)
+  | right _ => T_Thm
+  end.
+Next Obligation.
+  sauto. (* I absolutely do not understand ... *)
+Qed.
+
+Program Definition prfthm_3 {p q r} (H: (|- p) -> (|- q) -> |-r ) (thm_p thm_q: Thm): Thm :=
+  match formula_dec p (concl thm_p) with
+  | left Heq1 =>
+      match formula_dec q (concl thm_q) with
+      | left Heq2 => mkThm r (H _ _)
+      | right _ => T_Thm
+      end
+  | right _ => T_Thm
+  end.
+Next Obligation.
+  sauto. (* I absolutely do not understand ... *)
+Qed.
+
+Program Definition prfthm_4 {p q r s} (H: (|- p) -> (|- q) -> (|- r)-> |- s ) (thm_p thm_q thm_r: Thm): Thm :=
+  match formula_dec p (concl thm_p) with
+  | left Heq1 =>
+      match formula_dec q (concl thm_q) with
+      | left Heq2 =>
+          match formula_dec r (concl thm_r) with
+          | left Heq2 => mkThm s (H _ _ _)
+          | right _ => T_Thm
+      end
+      | right _ => T_Thm
+      end
+  | right _ => T_Thm
+  end.
+Next Obligation.
+  sauto. (* I absolutely do not understand ... *)
+Qed.
+Next Obligation.
+  sauto. (* I absolutely do not understand ... *)
+Qed.
+Next Obligation.
+  sauto. (* I absolutely do not understand ... *)
+Qed.
+Next Obligation.
+  sauto. (* I absolutely do not understand ... *)
+Qed.
+
+  
+(* usage *)
+
+Check iff_imp1.
+Check (prfthm_2 iff_imp1).
+Check (fun r => prfthm_2 (imp_add_concl r)).
+
+(**)
+
+Check imp_add_concl.
+
+(* missing implicit arguments ...*)
+(*
+Definition eliminate_connective f : Thm :=
+  if negb (negativef f) then
+    (prfthm_2 iff_imp1) (expand_connective f)
+  else
+    (fun r => prfthm_2 (imp_add_concl r)) ffalse ((prfthm_2 iff_imp2) (expand_connective(negatef f))).
+ *)
+
 
 (*** interactive proof style ***)
 
@@ -1693,3 +1929,24 @@ Program Definition apply_to_goal (g: goal)
 
 (***********)
 
+From elpi Require Import elpi.
+
+(* just for testing *)
+
+#[arguments(raw)] Elpi Command cmd.
+Elpi Accumulate File "harrison.elpi".
+Elpi Typecheck.
+Elpi Export cmd.
+
+#[arguments(raw)] Elpi Command tac.
+Elpi Accumulate File "harrison.elpi".
+Elpi Typecheck.
+Elpi Export cmd.
+
+Elpi cmd (|- ftrue).
+cmd "x y" => y / z.
+
+Lemma l {p q}: |- (p <=> q) ==> p.
+  red; intros.
+  elpi tac.
+  
