@@ -1,40 +1,45 @@
 (*
 thoughts/points:
 
-- original goal: verifying the fol lcf minimal kernel from Harrison' book [Handbook of Practical Logic and Automated Reasoning]
+- original goal: formalizing Chapter 6 of Harrison's [Handbook of Practical Logic and Automated Reasoning]
   => extraction of a certified Ocaml module for lcf kernel
-  => certified decision procedure (reflection) [tradeoff effort powerness ]
-  => decision procedure in tactics [more flexible]
+  => decision procedure by reflection [? quantifying effort vs reward, extraction, ... ?]
+  => decision procedure as tactics [more flexible]
   => testing a few Coq tools (e.g., coq-hammer ... elpi )
 
 - non structural recursive definition of term
-  => require to redefine the induction principle (based on Program/measure)
-  => rewriting lemmas on induction for each constructor
+  => requires to taylor the induction principle (based on Program/measure)
+  => for each constructor applied to the induction predicate, we have a rewriting lemma [ Rec (c a_0 ... a_n) = P a_0 ... a_n ]
 
-- usual notion in logic:
+- usual logic's notions:
+  ==> terms, formulas with semantics given by a model
   ==> satisfiability of formula f for model m: m |= f
   ==> validity as satisfiability for all model: |- m := V m, m |= f
 
-- need a dependent type bearing both the formula and its proof (i.e. a type for the set of provable formula). Otherwise, extracting a function/lemma based purely on (|-) leads to empty Ocaml code [c.f. illustrating extraction of modusponens and modusponens_thm]
+- need a dependent type bearing: (1) a formula and, (2) its proof. Otherwise, 
+  extracting a function/lemma based purely on (|-) leads to empty Ocaml code 
+  [c.f. illustrating extraction of modusponens and modusponens_thm]
 
-- in Harrison, equality is defined using the predicate constructor. We defined a dedicated constructor. Rational is
-  ==> there is no restriction on arity of predicate, while clearly one on equality
-  ==> if defined as a predicate, one need more hypothesis on the notion of model [i.e., the semantics of the predicate "="]
-  ==> equality is an ubiquitous primitive, with dedicated inference rule (e.g., superposition)
-  ==> we need to add some extra rules in the kernel (harrison only need refl): for now only commutativity and transitivity are considered [to be implemented]
+- in Harrison, equality is defined using the predicate constructor. 
+  We defined a dedicated constructor. Rational is
+  ==> there is no restriction on arity of predicate, while clearly there is on equality
+  ==> if defined as a predicate, one need more hypothesis in the definition of a model 
+  [i.e., the semantics of the predicate "="]
+  ==> equality is an ubiquitous primitive, with dedicated systems (e.g., superposition)
+  This modification has a consequence: we need to add some extra rules in the kernel.
+  Harrison only required reflexivity, we will need to add commutativity and transitivity.
 
 *)
 
 (*
 TODO:
-- add the axiom eqcomm & eqtrans to the kernel [requierement as eq has its own constructor]
+- add the axiom eqcomm & eqtrans to the kernel [requierement as equality has its own constructor]
 - use case for elpi/ltac ~~> Thm from/to (|- p)
-- clean proof
+- clean proof:
   ==> branches/cases to be more readable
-  ==> make key cut assertion explicit
+  ==> make key cut assertions explicit
   ==> remove all garbage / exploratory tactics, replacing by sauto
 *)
-
 
 Require Import Bool.
 Require Import Nat.
