@@ -1,24 +1,27 @@
 (*
-interesting points (for me ...):
+thoughts/points:
 
 - original goal: verifying the fol lcf minimal kernel from Harrison' book [Handbook of Practical Logic and Automated Reasoning]
-  => possibility of extracting a certified Ocaml module for lcf kernel
-  => implementing decision procedure inside Coq using elpi/ltac
-  => testing a few Coq tools (e.g., coq-hammer)
+  => extraction of a certified Ocaml module for lcf kernel
+  => certified decision procedure (reflection) [tradeoff effort powerness ]
+  => decision procedure in tactics [more flexible]
+  => testing a few Coq tools (e.g., coq-hammer ... elpi )
 
 - non structural recursive definition of term
   => require to redefine the induction principle (based on Program/measure)
   => rewriting lemmas on induction for each constructor
 
-- design based on the satifiability of formula (|- f) defined as satifiability over any model (V m, m |= f)
+- usual notion in logic:
+  ==> satisfiability of formula f for model m: m |= f
+  ==> validity as satisfiability for all model: |- m := V m, m |= f
 
-- having an verified & extracted Ocaml module require to have a dependent type bearing both the formula and its proof (i.e. a type for the set of provable formula). Otherwise, extracting a function/lemma based purely on (|-) leads to empty Ocaml code [please c.f. illustrating extration of modusponens and modusponens_thm]
+- need a dependent type bearing both the formula and its proof (i.e. a type for the set of provable formula). Otherwise, extracting a function/lemma based purely on (|-) leads to empty Ocaml code [c.f. illustrating extraction of modusponens and modusponens_thm]
 
-- in Harrison, equality is defined using the Predicate constructor. Here we define a special formula constructor. Rational is
-  ==> there is not restriction on arity of predicate, while clearly one on equality
+- in Harrison, equality is defined using the predicate constructor. We defined a dedicated constructor. Rational is
+  ==> there is no restriction on arity of predicate, while clearly one on equality
   ==> if defined as a predicate, one need more hypothesis on the notion of model [i.e., the semantics of the predicate "="]
-  ==> equality is somehow a primitive, which can appear in basic inference rule (e.g., superposition)
-  The counterpart is that one need to add some extra symbol (harrison only need refl): for now only commutativity and transitivity are considered
+  ==> equality is an ubiquitous primitive, with dedicated inference rule (e.g., superposition)
+  ==> we need to add some extra rules in the kernel (harrison only need refl): for now only commutativity and transitivity are considered [to be implemented]
 
 *)
 
@@ -26,7 +29,10 @@ interesting points (for me ...):
 TODO:
 - add the axiom eqcomm & eqtrans to the kernel [requierement as eq has its own constructor]
 - use case for elpi/ltac ~~> Thm from/to (|- p)
-- add interesting point [at least for me] in preambul
+- clean proof
+  ==> branches/cases to be more readable
+  ==> make key cut assertion explicit
+  ==> remove all garbage / exploratory tactics, replacing by sauto
 *)
 
 
@@ -37,7 +43,6 @@ Require Import List.
 Import ListNotations.
 Require Import String.
 Require Import Lia.
-From Hammer Require Import Tactics.
 
 (* optional [not used so far ...] *)
 (*
@@ -45,6 +50,13 @@ From Hammer Require Import Hammer.
 Set Hammer GSMode 2.
 *)
 (**)
+
+
+(* funky stuff (c.f. above) *)
+From Hammer Require Import Tactics.
+From elpi Require Import elpi.
+(**)
+
 
 Require Import Coq.Program.Wf.
 
@@ -58,8 +70,7 @@ Require Import ExtrOcamlNatBigInt.
 
 (**** some general helper lemmas ******)
 (*
-Morally those lemmas are more or less generic (i.e. not related to types defined below.
-But I could not find anything close in the standard library.
+[ TODO: try to find equivalents in standard library and remove this section ]
 *)
 
 Program Fixpoint list_dec {A: Set} (l1: list A) (A_dec: forall a1, In a1 l1 -> forall a2, { a1 = a2 } + { a1 <> a2 }) (l2: list A) { struct l1 }: { l1 = l2 } + { l1 <> l2 } :=
@@ -248,12 +259,11 @@ Fixpoint funpow (n: nat) {A} (f: A -> A) (x: A): A :=
 (*****************************************)
 
 (* 
-we are defining the model before the terms & formulas, which might be strange
-*) 
-
-(* we defined a type to be used for the model
-   (rmq: if this is also defined with decidable equality, we might remove the axiom on decidability of formula)
- *)
+a model gives semantics to:
+1) variables
+2) functions
+3) predicates
+*)
 
 Record InhabitedType : Type := {
                                 set :> Set;
@@ -268,7 +278,7 @@ Record Model {Value: InhabitedType}: Type := {
   }.
 
 (*
-  updating a model (changing variable mapping), together with variant / invariant lemmas
+  updating a model (changing variables mapping), together with variant / invariant lemmas
  *)
 
 Definition updated_model {V} (m: @Model V) (x: string) (v: V): @Model V :=
@@ -519,7 +529,9 @@ Qed.
 (**************************************)
 
 (*
-  First order formulas (we skip the type argument, and inlined fol in Atom
+  First order formulas 
+  ==> we skip the type argument, inlining fol in Atom
+  ==> equality as a primitive
 *)
 
 Inductive formula: Set :=
@@ -610,7 +622,7 @@ Fixpoint formula_free_vars (f: formula) : list string :=
 
 (*
   for all models with same valuation over free variables variable valuation,
-  semantics is preserved (the same)
+  semantics is preserved
 *)
 
 Lemma formula_vars_term_sem {V}:
@@ -619,6 +631,11 @@ Lemma formula_vars_term_sem {V}:
     (forall f l, fn_sem m1 f l = fn_sem m2 f l) ->
     (forall p l, pred_sem m1 p l = pred_sem m2 p l) ->
     (m1 |= f) <-> (m2 |= f).
+
+  (*
+[ TODO: clean this proof ... ]
+   *)
+  
 induction f; simpl; intros; auto.
 
 intuition.
@@ -813,8 +830,7 @@ Qed.
 (** all the lemmas to be used in the implementation **)
 (** comming in two flavors
 1) with  (|- f) goals / hypothesis
-2) with Thm dependent type hiding the conclusion (using 1)
-
+2) with Thm dependent type of provable formulas [required for extraction]
 **)
 
 Lemma modusponens {p q: formula}:
@@ -829,6 +845,7 @@ Lemma modusponens {p q: formula}:
   auto.
 Qed.
 
+(* the extraction leads to "empty" code ... *)
 Extraction "test1.ml" modusponens.
 
 Program Definition modusponens_thm (thm1 thm2: Thm): Thm :=
@@ -849,6 +866,7 @@ Next Obligation.
   apply i0.
 Qed.
 
+(* .. hence the need of the dependent type for generating genuine OCaml code *)
 Extraction "test2.ml" modusponens_thm.
 
 
@@ -1098,7 +1116,12 @@ Qed.
 Program Definition exists_thm (x: string) (p: formula): Thm := 
   mkThm _ (lemma_exists x p).
 
-(* need to cleanup *)
+(* need to cleanup this part 
+   this is the first instance where we need to deal with
+   inferrence rules over formulas with a variable number of elements
+   ( p_0 -> ... -> p_n -> ____ )
+   dependent types helps simplifying the formalization
+*)
   
 Lemma l1 (l: list( term * term)) {V} (m: @Model V):
     (forall x, In x l -> let (x1, x2) := x in eval m x1 = eval m x2) ->
@@ -1285,7 +1308,7 @@ Qed.
 Program Definition predcong_thm (P: string) (lhs rhs: list term) : Thm :=
     mkThm _ (lemma_predcong P (zip lhs rhs)).
   
-(** first in the module to be dump in OCaml **)
+(** the lcf kernel as a extractable module **)
   
 Module Proven: ProofSystem.
 
@@ -1365,7 +1388,7 @@ Module Proven: ProofSystem.
   
 End Proven.
 
-
+(* the original objective of this formalization *)
 Extraction "harrison.ml" Proven.
 
 (******* further propositional lemmas *********)
@@ -1502,8 +1525,12 @@ Lemma truth: |- ftrue.
         ).
 Qed.
 
-(* interesting *)
-Definition theorem_tuple (l: list formula) : Type := tuple (map (fun x => is_valid x) l).
+(*
+
+second instance with inference rules over formulas with variable
+number of elements.
+
+*)
 
 Lemma tuple_formulas_conj: forall
     (l: list formula)
@@ -1661,6 +1688,8 @@ Qed.
 
 (****** p. 506 => tableau procedure ********)
 
+Definition theorem_tuple (l: list formula) : Type := tuple (map (fun x => is_valid x) l).
+
 Lemma iff_def p q: |- (p <=> q) <=> ((p ==> q) //\\ (q ==> p)).
   assert (theorem_tuple [(p <=> q) ==> (p ==> q); (p <=> q) ==> (q ==> p)]).
   eapply tcons.
@@ -1686,7 +1715,9 @@ Qed.
 
 (***)
 
-(* looks like this is a corner case for program ... *)
+(* looks like this is a corner case for program ... 
+   no clue of where all the obligations are coming from ...
+*)
 (*
 Program Definition expand_connective (f: formula) : { fm: formula | |- f <=> fm } :=
   match f with
@@ -1725,6 +1756,8 @@ Definition negativef (f: formula): bool :=
   | p ==> ffalse => true
   | p => false
   end.
+
+(*** experimental ***)
 
 (*
   definition to perform transformation: thm <-> |- p
@@ -1788,7 +1821,7 @@ Check (fun r => prfthm_2 (imp_add_concl r)).
 
 Check imp_add_concl.
 
-(* missing implicit arguments ...*)
+(* missing implicit arguments ... not sure to understand *)
 (*
 Definition eliminate_connective f : Thm :=
   if negb (negativef f) then
@@ -1798,7 +1831,7 @@ Definition eliminate_connective f : Thm :=
  *)
 
 
-(*** interactive proof style ***)
+(********* interactive proof style *********)
 
 Record goal: Type := {
     hypothesises: list formula;
@@ -1832,11 +1865,21 @@ Qed.
 (* solving a subgoal 
 
 given
-|- p_0 -> ... -> p_i -> ... -> p_n -> g
-|- p_i
+(1) |- p_0 -> ... -> p_i -> ... -> p_n -> g
+(2) |- p_i
 
 we can remove the p_i
-|- p_0 -> ... -> p_n -> g
+(3) |- p_0 -> ... -> p_n -> g
+
+rmq: surprising how we mess in the lemma with the order of inference rule:
+
+ (2) (3) 
+---------
+   (1)
+
+but here: (2) -> (1) -> (3)
+
+[need to clarify this point]
 
 *)
 
@@ -1875,7 +1918,10 @@ given
 
 we can replace p_i by the q_0, ..., q_m
 |- p_0 -> ... -> q_0 -> ... -> q_m -> p_n -> g
- *)
+
+same remarque as above
+
+*)
 
 Lemma formulas_conj_incl_m {V} (m: @Model V) (l1 l2: list formula):
   incl l1 l2 ->
@@ -1928,8 +1974,6 @@ Program Definition apply_to_goal (g: goal)
   |}.
 
 (***********)
-
-From elpi Require Import elpi.
 
 (* just for testing *)
 
