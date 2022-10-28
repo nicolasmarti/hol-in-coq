@@ -1,20 +1,25 @@
 (*
+
 thoughts/points:
 
-- original goal: formalizing Chapter 6 of Harrison's [Handbook of Practical Logic and Automated Reasoning]
+- original goal: formalizing Chapter 6 of Harrison's 
+                 [Handbook of Practical Logic and Automated Reasoning]
   => extraction of a certified Ocaml module for lcf kernel
   => decision procedure by reflection [? quantifying effort vs reward, extraction, ... ?]
   => decision procedure as tactics [more flexible]
   => testing a few Coq tools (e.g., coq-hammer ... elpi )
 
 - non structural recursive definition of term
-  => requires to taylor the induction principle (based on Program/measure)
-  => for each constructor applied to the induction predicate, we have a rewriting lemma [ Rec (c a_0 ... a_n) = P a_0 ... a_n ]
+  => requires a taylor made induction principle 
+     (based on Program/measure)
+  => for each constructor applied to the induction predicate, 
+     we have a rewriting lemma [ Rec (c a_0 ... a_n) = P a_0 ... a_n ]
+     (avoiding verbose goals on unfolding/reducing proof terms)
 
 - usual logic's notions:
-  ==> terms, formulas with semantics given by a model
-  ==> satisfiability of formula f for model m: m |= f
-  ==> validity as satisfiability for all model: |- m := V m, m |= f
+  ==> formula (i.e., var + function + predicate) semantics given by a model
+  ==> satisfiability of formula f for model m: (m |= f)
+  ==> validity as satisfiability for all model: (|- m := V m, m |= f)
 
 - need a dependent type bearing: (1) a formula and, (2) its proof. Otherwise, 
   extracting a function/lemma based purely on (|-) leads to empty Ocaml code 
@@ -22,9 +27,9 @@ thoughts/points:
 
 - in Harrison, equality is defined using the predicate constructor. 
   We defined a dedicated constructor. Rational is
-  ==> there is no restriction on arity of predicate, while clearly there is on equality
-  ==> if defined as a predicate, one need more hypothesis in the definition of a model 
-  [i.e., the semantics of the predicate "="]
+  ==> no restriction on arity for predicate
+  ==> if defined as a predicate, models needs extra assumptions
+      [ the semantics of the predicate "=" ]
   ==> equality is an ubiquitous primitive, with dedicated systems (e.g., superposition)
   This modification has a consequence: we need to add some extra rules in the kernel.
   Harrison only required reflexivity, we will need to add commutativity and transitivity.
@@ -361,12 +366,14 @@ generalize (IHl x H0); simpl; intros; auto.
 lia.
 Qed.
 
-(*
-  Maybe the most interesting point of this formalization:
-  term cannot be used with the usual inductive type workflow of Coq.
-  So we need to redefine the recursion scheme [here using the extra hypothesis in P_fn, that the terms are part of the list arguments.
-  Furthermore, we define two lemmas for rewriting on each constructors (avoiding too much verbose coq unfolding). In this case, the lemmas in WfExtensionality were more than instrumental.
-*)
+(* Maybe the most interesting point of this formalization: terms
+  cannot be used with the usual inductive type mechanism of Coq. So we
+  need to redefine the recursion scheme. The key point is that all
+  terms explored are subterms [!not clear!]<possibly interesting point
+  for more generic induction scheme>. Furthermore, we define two
+  lemmas for rewriting the induction lemma for each constructors
+  (avoiding too much verbose coq unfolding/reduction). In this case,
+  the lemmas in WfExtensionality were instrumentals. *)
 
 Program Fixpoint term_recursion
   (t: term) 
@@ -383,7 +390,7 @@ Next Obligation.
 apply term_measure_elt; auto.
 Qed.
 
-(* this is a couple simple rewriting rule that one could use for simplification in lemmas *)
+(* the rewriting lemma for both constructors *)
 Lemma term_recursion_var P P_var P_fn: forall s,
     term_recursion (var s) P P_var P_fn = P_var s.
 auto.
@@ -399,9 +406,8 @@ Lemma term_recursion_fn P P_var P_fn: forall s l,
   auto.
 Qed.
 
-(*
-  We will need a variant of map which covers the extra hypothesis that the term belongs to the function arguments
-*)
+(* We will need a variant of map which covers the extra hypothesis
+  that the term belongs to the function arguments *)
 
 Program Fixpoint map_term {A: Set} (l: list term) (P: forall x: term, In x l -> A) { struct l }: list A :=
   match l with
@@ -460,9 +466,8 @@ Next Obligation.
   right; injection; intuition.
 Defined.
 
-(*
-  Evaluation of a term given a model, together with rewriting lemmas for constructors
-*)
+(* Evaluation of a term given a model, together with rewriting lemmas
+  for constructors *)
 
 Definition eval {V} (m: @Model V) (t: term) : V :=
   term_recursion t (fun _ => V) (var_sem m) (fun s l H => (fn_sem m) s (map_term l H)).
