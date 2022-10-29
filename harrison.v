@@ -34,6 +34,16 @@ thoughts/points:
   This modification has a consequence: we need to add some extra rules in the kernel.
   Harrison only required reflexivity, we will need to add commutativity and transitivity.
 
+- sometimes Program generate tons of obligations [c.f. below]:
+  ==> I do not understand where they are coming in the source definition
+  ==> I do not understand what is their meanings
+  ==> I do not understand how can they be proved (but sauto knows ...)
+
+- In several cases, the (|-) inference rule are schemas
+  (e.g.,  |- p_0 ==> ... ==> p_n ==> p_i { for i in [0, n] } )
+  for those dependent types are of essence, but not that easy
+  to handle (for instance, might needs reification)
+
 *)
 
 (*
@@ -44,6 +54,11 @@ TODO:
   ==> branches/cases to be more readable
   ==> make key cut assertions explicit
   ==> remove all garbage / exploratory tactics, replacing by sauto
+ *)
+
+(*
+stupid ideas:
+- connection with why3 ??
 *)
 
 Require Import Bool.
@@ -370,10 +385,10 @@ Qed.
   cannot be used with the usual inductive type mechanism of Coq. So we
   need to redefine the recursion scheme. The key point is that all
   terms explored are subterms [!not clear!]<possibly interesting point
-  for more generic induction scheme>. Furthermore, we define two
-  lemmas for rewriting the induction lemma for each constructors
+  for more generic induction scheme>. Furthermore, we define a lemma
+  for rewriting the induction lemma applied to each constructors
   (avoiding too much verbose coq unfolding/reduction). In this case,
-  the lemmas in WfExtensionality were instrumentals. *)
+  the lemmas in WfExtensionality are instrumentals. *)
 
 Program Fixpoint term_recursion
   (t: term) 
@@ -540,8 +555,8 @@ Qed.
 
 (*
   First order formulas 
-  ==> we skip the type argument, inlining fol in Atom
-  ==> equality as a primitive
+  ==> we skip the type parameterization (inlining fol in Atom)
+  ==> equality defined as a primitive (rather than a predicate)
 *)
 
 Inductive formula: Set :=
@@ -1823,22 +1838,27 @@ Qed.
   
 (* usage *)
 
-Check iff_imp1.
-Check (prfthm_2 iff_imp1).
-Check (fun r => prfthm_2 (imp_add_concl r)).
-
+Check @iff_imp1.
+(* forall p q : formula, (|- p <=> q) -> |- p ==> q *)
+Check (fun p q => prfthm_2 (@iff_imp1 p q)).
+(* : formula -> formula -> Thm -> Thm *)
+Check (fun p q r => prfthm_2 (@imp_add_concl p q r)).
+(* formula -> formula -> formula -> Thm -> Thm *)
 (**)
 
 Check imp_add_concl.
 
 (* missing implicit arguments ... not sure to understand *)
+
+Check (fun f => (prfthm_2 iff_imp1) (expand_connective f)).
+
 (*
 Definition eliminate_connective f : Thm :=
   if negb (negativef f) then
     (prfthm_2 iff_imp1) (expand_connective f)
   else
     (fun r => prfthm_2 (imp_add_concl r)) ffalse ((prfthm_2 iff_imp2) (expand_connective(negatef f))).
- *)
+*)
 
 
 (********* interactive proof style *********)
@@ -2000,7 +2020,9 @@ Elpi Export cmd.
 Elpi cmd (|- ftrue).
 cmd "x y" => y / z.
 
+
 Lemma l {p q}: |- (p <=> q) ==> p.
   red; intros.
   elpi tac.
-  
+Abort.
+
