@@ -40,8 +40,8 @@ thoughts/points:
   ==> I do not understand how can they be proved (but sauto knows ...)
 
 - In several cases, the (|-) inference rule are schemas
-  (e.g.,  |- p_0 ==> ... ==> p_n ==> p_i { for i in [0, n] } )
-  for those dependent types are of essence, but not that easy
+  (e.g.,  |- p_0 ==> ... ==> p_n ==> p_i { for i in [0, n] })
+  for those, dependent types are of essence, but not that easy
   to handle (for instance, might needs reification)
 
 *)
