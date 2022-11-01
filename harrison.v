@@ -48,7 +48,7 @@ thoughts/points:
 
 (*
 TODO:
-- add the axiom eqcomm & eqtrans to the kernel [requierement as equality has its own constructor]
+- clean redundant proof of eqcomm and eqtrans
 - use case for elpi/ltac ~~> Thm from/to (|- p)
 - clean proof:
   ==> branches/cases to be more readable
@@ -797,6 +797,12 @@ Module Type ProofSystem.
 
   (*  |- t = t                                                                 *)
   Parameter axiom_eqrefl: term -> Thm.
+
+  (*  |- t = s ==> s |- t *)
+  Parameter axiom_eqcomm: term -> term -> Thm.
+
+  (*  |- t = s ==> s |- r ==> t = r *)
+  Parameter axiom_eqtrans: term -> term -> term -> Thm.
   
   (*  |- s1 = t1 ==> ... ==> sn = tn ==> f(s1,..,sn) = f(t1,..,tn)             *)
   Parameter axiom_funcong: string -> list term -> list term -> Thm.
@@ -1019,6 +1025,29 @@ Qed.
 
 Program Definition eqrefl_thm (t: term): Thm :=
   mkThm _ (lemma_eqrefl t).    
+
+
+(**)
+
+Lemma lemma_eqcomm (t s: term):
+  |- t == s ==> s == t.
+  red; intros.
+  red; auto.
+Qed.
+
+Program Definition eqcomm_thm (t s: term): Thm :=
+  mkThm _ (lemma_eqcomm t s).    
+
+(**)
+
+Lemma lemma_eqtrans (t s r: term):
+  |- t == s ==> s == r ==> t == r.
+  red; intros.
+  sauto.
+Qed.
+
+Program Definition eqtrans_thm (t s r: term): Thm :=
+  mkThm _ (lemma_eqtrans t s r).    
 
 (**)
 
@@ -1379,6 +1408,12 @@ Module Proven: ProofSystem.
   
   (*  |- t = t                                                                 *)
   Definition axiom_eqrefl (t: term): Thm := eqrefl_thm t.
+  
+  (*  |- t = s ==> s |- t *)
+  Definition axiom_eqcomm (t s: term): Thm := eqcomm_thm t s.
+
+  (*  |- t = s ==> s |- r ==> t = r *)
+  Definition axiom_eqtrans (t s r: term): Thm := eqtrans_thm t s r.
   
   (*  |- s1 = t1 ==> ... ==> sn = tn ==> f(s1,..,sn) = f(t1,..,tn)             *)
   
