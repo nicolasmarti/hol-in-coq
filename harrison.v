@@ -1233,12 +1233,43 @@ Lemma eq_pred (l: list( term * term)) {V} (m: @Model V) P:
   rewrite l1_2; intuition.
 Qed.
 
+(* This is the generic definition (easy to use in proof) *)
 Fixpoint formulas_conj (l: list formula) : formula :=
   match l with
   | nil => ftrue
   | hd::tl => hd //\\ formulas_conj tl
   end.
 
+(* for sake of computing over dependent type, we might prefer this version *)
+Fixpoint formulas_conj_alt (l: list formula) : formula :=
+  match l with
+  | nil => ftrue
+  | hd::nil => hd
+  | hd::tl => hd //\\ formulas_conj_alt tl
+  end.
+
+(* and we prove the equivalence *)
+Lemma fomulas_conj_alt_eq {V} (m: @Model V):
+  forall l,
+    (m |= formulas_conj l) <-> (m |= formulas_conj_alt l).
+  induction l; simpl.
+  intuition.
+  split; intros.
+  destruct l.
+  intuition.
+  split.
+  intuition.
+  rewrite <- IHl.
+  intuition.
+  split.
+  destruct l; intuition.
+  inversion_clear H; auto.
+  rewrite IHl.
+  destruct l; intuition.
+  sauto.
+  inversion_clear H; auto.
+Qed.  
+  
 Lemma conj_forall_eq_m (l: list formula) {V} (m: @Model V):
   (forall x, In x l -> m |= x) <->
     (m |= formulas_conj l).
