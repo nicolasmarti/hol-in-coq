@@ -48,7 +48,6 @@ thoughts/points:
 
 (*
 TODO:
-- clean redundant proof of eqcomm and eqtrans
 - use case for elpi/ltac ~~> Thm from/to (|- p)
 - clean proof:
   ==> branches/cases to be more readable
@@ -1734,15 +1733,9 @@ Qed.
 (******* FOL lemmas *************)
 
 (* FOL lemmas *)
-Lemma eq_sym (s t: term): |- (s == t) ==> (t == s).
-  red; intros.
-  sauto.
-Qed.
+Definition eq_sym (s t: term): |- (s == t) ==> (t == s) := lemma_eqcomm s t.
 
-Lemma eq_trans (s t u: term): |- (s == t) ==> (t == u) ==> (s == u).
-  red; intros.
-  sauto.
-Qed.
+Definition eq_trans (s t u: term): |- (s == t) ==> (t == u) ==> (s == u) := lemma_eqtrans s t u.
 
 (*to continue*)
 
