@@ -1954,11 +1954,11 @@ Qed.
 (* solving a subgoal 
 
 given
-(1) |- p_0 -> ... -> p_i -> ... -> p_n -> g
+(1) |- p_0 /\ ... /\ p_i /\ ... -> p_n -> g
 (2) |- p_i
 
 we can remove the p_i
-(3) |- p_0 -> ... -> p_n -> g
+(3) |- p_0 /\ ... /\ p_n -> g
 
 rmq: surprising how we mess in the lemma with the order of inference rule:
 
@@ -2002,11 +2002,11 @@ Program Definition solve_hypothesis (g: goal) {p} (H: |- p): goal :=
 (*  this is a generalization of above *)
 (*
 given
-|- p_0 -> ... -> p_i -> ... -> p_n -> g
-|- q_0 -> ... -> q_m -> p_i
+|- p_0 /\ ... /\ p_i /\ ... /\ p_n -> g
+|- q_0 /\ ... /\ q_m -> p_i
 
 we can replace p_i by the q_0, ..., q_m
-|- p_0 -> ... -> q_0 -> ... -> q_m -> p_n -> g
+|- p_0 /\ ... /\ q_0 /\ ... /\ q_m /\ p_n -> g
 
 same remarque as above
 
