@@ -6,7 +6,7 @@ thoughts/points:
                  [Handbook of Practical Logic and Automated Reasoning]
   => extraction of a certified Ocaml module for lcf kernel
   => decision procedure by reflection [? quantifying effort vs reward, extraction, ... ?]
-  => decision procedure as tactics [more flexible]
+  => decision procedure as tactics [more flexible, no extraction]
   => testing a few Coq tools (e.g., coq-hammer ... elpi )
 
 - non structural recursive definition of term
@@ -17,32 +17,32 @@ thoughts/points:
      (avoiding verbose goals on unfolding/reducing proof terms)
 
 - usual logic's notions:
-  ==> formula (i.e., var + function + predicate) semantics given by a model
-  ==> satisfiability of formula f for model m: (m |= f)
-  ==> validity as satisfiability for all model: (|- m := V m, m |= f)
+  ==> a model maps terms to values, and propositions to booleans/Prop@coq
+  ==> a model satifies a formula := the model evaluates the formula to true/True (m |= f)
+  ==> validity of a formula := all model satifies the formula       (|- m := V m, m |= f)
 
 - need a dependent type bearing: (1) a formula and, (2) its proof. Otherwise, 
-  extracting a function/lemma based purely on (|-) leads to empty Ocaml code 
+  extracting a function/lemma based purely on (|-) leads to an empty Ocaml code 
   [c.f. illustrating extraction of modusponens and modusponens_thm]
 
-- in Harrison, equality is defined using the predicate constructor. 
-  We defined a dedicated constructor. Rational is
-  ==> no restriction on arity for predicate
+- in Harrison, equality is defined as a predicate. 
+  We made it a formula constructor, for the following reasons:
   ==> if defined as a predicate, models needs extra assumptions
       [ the semantics of the predicate "=" ]
-  ==> equality is an ubiquitous primitive, with dedicated systems (e.g., superposition)
+  ==> equality is an ubiquitous primitive for reasoning systems (e.g., superposition)
   This modification has a consequence: we need to add some extra rules in the kernel.
   Harrison only required reflexivity, we will need to add commutativity and transitivity.
 
-- sometimes Program generate tons of obligations [c.f. below]:
-  ==> I do not understand where they are coming in the source definition
-  ==> I do not understand what is their meanings
-  ==> I do not understand how can they be proved (but sauto knows ...)
+- sometimes Program generates opaque obligations:
+  ==> where are they coming from ?
+  ==> what is their purpose ?
+  ==> how can they be proved ? (tactics knows ... not me)
 
-- In several cases, the (|-) inference rule are schemas
+- We have satisfiability schemas :
   (e.g.,  |- p_0 ==> ... ==> p_n ==> p_i { for i in [0, n] })
-  for those, dependent types are of essence, but not that easy
-  to handle (for instance, might needs reification)
+  (e.g.,  |- p_0 //\\ ... //\\ p_n ==> p_i { for i in [0, n] })
+  for those, dependent types are of essence, but not easy to apply 
+  (for use case for reification by tactics)
 
 *)
 
@@ -69,10 +69,10 @@ Require Import String.
 Require Import Lia.
 
 (* optional [not used so far ...] *)
-(*
+
 From Hammer Require Import Hammer.
 Set Hammer GSMode 2.
-*)
+
 (**)
 
 
@@ -752,6 +752,7 @@ apply remove_In_diff; auto.
 
 Qed.
 
+(************************************************************)
 
 (* definition of validity: all models satisfy the formula *)
 
@@ -761,7 +762,7 @@ Definition is_valid (f: formula) : Prop :=
 
 Notation "'|-' f" := (is_valid f) (at level 150, right associativity).
 
-(*********************************)
+(************************************************************)
 
 (*** Module for Ocaml extraction  ***)
 
@@ -1248,8 +1249,10 @@ Fixpoint formulas_conj_alt (l: list formula) : formula :=
   | hd::tl => hd //\\ formulas_conj_alt tl
   end.
 
-(* and we prove the equivalence *)
-Lemma fomulas_conj_alt_eq {V} (m: @Model V):
+(****)
+
+(* and we prove all the required equivalences *)
+Lemma formulas_conj_alt_eq_satisfibility {V} (m: @Model V):
   forall l,
     (m |= formulas_conj l) <-> (m |= formulas_conj_alt l).
   induction l; simpl.
@@ -1269,7 +1272,50 @@ Lemma fomulas_conj_alt_eq {V} (m: @Model V):
   sauto.
   inversion_clear H; auto.
 Qed.  
+
+Lemma formulas_conj_alt_eq_satisfibility2 {V} (m: @Model V):
+  forall ccl l,
+    (m |= formulas_conj l ==> ccl) <-> (m |= formulas_conj_alt l ==> ccl).
+  intros.
+  split; intros; intro.
   
+  cut (m |= formulas_conj l).
+  sauto.
+  rewrite formulas_conj_alt_eq_satisfibility; auto.
+
+  cut (m |= formulas_conj_alt l).
+  sauto.
+  rewrite <- formulas_conj_alt_eq_satisfibility; auto.
+
+Qed.
+  
+Lemma formulas_conj_alt_eq_validity:
+  forall l,
+    (|- formulas_conj l) <-> (|- formulas_conj_alt l).
+  intros; split; intros.
+  red; intros.
+  generalize (H _ m); intros.
+  rewrite <- formulas_conj_alt_eq_satisfibility; auto.
+  red; intros.
+  generalize (H _ m); intros.
+  rewrite formulas_conj_alt_eq_satisfibility; auto.
+Qed.  
+
+Lemma formulas_conj_alt_eq_validity2:
+  forall ccl l,
+    (|- formulas_conj l ==> ccl) <-> (|- formulas_conj_alt l ==> ccl).
+  intros; split; intros.
+  red; intros.
+  generalize (H _ m); intros.
+  rewrite <- formulas_conj_alt_eq_satisfibility2; auto.
+  red; intros.
+  generalize (H _ m); intros.
+  rewrite formulas_conj_alt_eq_satisfibility2; auto.
+Qed.  
+
+(****)
+
+
 Lemma conj_forall_eq_m (l: list formula) {V} (m: @Model V):
   (forall x, In x l -> m |= x) <->
     (m |= formulas_conj l).
@@ -1480,6 +1526,8 @@ End Proven.
 
 (* the original objective of this formalization *)
 Extraction "harrison.ml" Proven.
+
+(************************************************************)
 
 (******* further propositional lemmas *********)
 
@@ -1761,6 +1809,8 @@ Lemma unshunt {p q r} (H: |- p ==> q ==> r): |- p //\\ q ==> r.
   auto.
 Qed.
 
+(************************************************************)
+
 (******* FOL lemmas *************)
 
 (* FOL lemmas *)
@@ -1770,6 +1820,7 @@ Definition eq_trans (s t u: term): |- (s == t) ==> (t == u) ==> (s == u) := lemm
 
 (*to continue*)
 
+(************************************************************)
 (****** p. 506 => tableau procedure ********)
 
 Definition theorem_tuple (l: list formula) : Type := tuple (map (fun x => is_valid x) l).
@@ -1919,36 +1970,35 @@ Definition eliminate_connective f : Thm :=
     (fun r => prfthm_2 (imp_add_concl r)) ffalse ((prfthm_2 iff_imp2) (expand_connective(negatef f))).
 *)
 
+(************************************************************)
 
 (********* interactive proof style *********)
 
 Record goal: Type := {
     hypothesises: list formula;
     ccl: formula;
-    justification: |- formulas_conj hypothesises ==> ccl
+    justification: |- formulas_conj_alt hypothesises ==> ccl
   }.
 
 Lemma close_goal (g: goal) (t: tuple (map (fun x => |- x) (hypothesises g) )): |- ccl g.
   destruct g.
   simpl in t; simpl.
   generalize (tuple_formulas_conj _ t); intros.
-  apply (modusponens justification0 H).
+  apply (modusponens justification0).
+  rewrite <- formulas_conj_alt_eq_validity; auto.
 Qed.
 
-Definition closed_goal (g: goal) := eq_nat_dec 0 (List.length (hypothesises g)).
-
-Definition is_closed_goal (g: goal) := (List.length (hypothesises g)) = 0.
-
+Definition closed_goal (g: goal): Prop := (List.length (hypothesises g)) = 0.
+Lemma closed_goal_empty_hypo (g: goal) (H: closed_goal g):  hypothesises g = [].
+  strivial use: length_zero_iff_nil unfold: closed_goal, hypothesises.
+Qed.
+  
 Lemma closed_goal_ccl (g: goal):
-  is_closed_goal g ->
-  |- ccl g.
-  destruct g.
+  closed_goal g ->
+      |- ccl g.  
   intros.
-  apply close_goal.
-  destruct hypothesises0.
-  simpl.
-  apply tnil.
-  sauto.
+  generalize (closed_goal_empty_hypo _ H); intros.
+  hauto use: justification, truth, @modusponens unfold: hypothesises, formulas_conj_alt, ccl.
 Qed.
 
 (* solving a subgoal 
@@ -1975,9 +2025,13 @@ but here: (2) -> (1) -> (3)
 Lemma solved_hypothesis {l: list formula} {ccl: formula} {p: formula}:
   forall
     (H: |- p)
-    (H1: |- formulas_conj l ==> ccl)
-    , |- formulas_conj (remove_dec formula_dec p l) ==> ccl.
+    (H1: |- formulas_conj_alt l ==> ccl)
+    , |- formulas_conj_alt (remove_dec formula_dec p l) ==> ccl.
   intros.
+
+  rewrite <- formulas_conj_alt_eq_validity2.
+  rewrite <- formulas_conj_alt_eq_validity2 in H1.
+  
   red; intros.
   intro.
   rewrite <- conj_forall_eq_m in H0.
@@ -2028,10 +2082,15 @@ Lemma generalize_implication
   {l2: list formula} {ccl2: formula}  
   :
   forall
-    (H1: |- formulas_conj l1 ==> ccl1)
-    (H2: |- formulas_conj l2 ==> ccl2)
-    , |- formulas_conj (replace_dec formula_dec ccl2 l2 l1) ==> ccl1.
+    (H1: |- formulas_conj_alt l1 ==> ccl1)
+    (H2: |- formulas_conj_alt l2 ==> ccl2)
+    , |- formulas_conj_alt (replace_dec formula_dec ccl2 l2 l1) ==> ccl1.
   intros.
+
+  rewrite <- formulas_conj_alt_eq_validity2.
+  rewrite <- formulas_conj_alt_eq_validity2 in H1.
+  rewrite <- formulas_conj_alt_eq_validity2 in H2.
+
   red; intros.
   intro.
   generalize (H1 _ m); intro.
