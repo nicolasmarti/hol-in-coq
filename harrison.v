@@ -38,7 +38,7 @@ thoughts/points:
   ==> what is their purpose ?
   ==> how can they be proved ? (tactics knows ... not me)
 
-- We have satisfiability schemas :
+- We have validity schemas :
   (e.g.,  |- p_0 ==> ... ==> p_n ==> p_i { for i in [0, n] })
   (e.g.,  |- p_0 //\\ ... //\\ p_n ==> p_i { for i in [0, n] })
   for those, dependent types are of essence, but not easy to apply 
@@ -58,6 +58,8 @@ TODO:
 (*
 stupid ideas:
 - connection with why3 ??
+- coq-hammer: could it helps quantifying what are the proper lemmas ??
+  ==> the more all lemmas are automatically provable, the better the formalization in terms of elementary/helper lemmas
 *)
 
 Require Import Bool.
@@ -68,7 +70,7 @@ Import ListNotations.
 Require Import String.
 Require Import Lia.
 
-(* optional [not used so far ...] *)
+(* just for dev time *)
 
 From Hammer Require Import Hammer.
 Set Hammer GSMode 2.
@@ -103,19 +105,18 @@ Program Fixpoint list_dec {A: Set} (l1: list A) (A_dec: forall a1, In a1 l1 -> f
   | hd::tl => _ (@list_dec A tl _)
   end.
 Next Obligation.
-  destruct l2; simpl; auto.
-  right; intro H; inversion H.
+  sauto lq: on.  
 Defined.
 Next Obligation.
-  destruct l2 ;simpl; auto.
-  right; intro H; inversion H.
+  destruct l2; simpl; auto.
+  sfirstorder.
   assert (In hd (hd::tl)) by intuition.
-  generalize (A_dec _ H a); intro H1; inversion_clear H1.
+  assert ({hd = a} + {hd <> a}) by hauto lq: on.
+  inversion_clear H0.
   subst a; generalize (x l2); intro H0; inversion_clear H0.
-  subst l2; left; intuition.
-  right; simpl; injection.
-  auto.
-  right; injection; intuition.
+  sfirstorder.
+  hauto lq: on.
+  hauto lq: on.
 Defined.
 Next Obligation.
   intuition.
@@ -237,6 +238,14 @@ Lemma replace_dec_neq {A: Type}
   sauto.
   sauto.
 Qed.
+
+Lemma replace_dec_eq_remove_eq_dec {A: Type}
+  (A_dec: forall (x y: A), { x = y } + { x <> y })
+  (e: A): forall (l: list A),
+    replace_dec A_dec e [] l = remove_dec A_dec e l.
+  induction l; simpl; intros; auto.
+  sauto.
+Qed.  
 
 (**)
 Fixpoint zip {A B} (l1: list A) (l2: list B): list (A * B) :=
@@ -762,6 +771,22 @@ Definition is_valid (f: formula) : Prop :=
 
 Notation "'|-' f" := (is_valid f) (at level 150, right associativity).
 
+(*
+Lemma validity_satisfiability (f1 f2: formula):
+  ( forall {V} (m: @Model V), (m |= f1) <-> (m |= f2) ) <-> ( (|- f1) <-> (|- f2) ).
+  split; intro H.
+  split; intros; red; intros.
+  rewrite <- (H).
+  apply H0.
+  rewrite (H).
+  apply H0.
+  inversion_clear H.
+  intros; split; intros.
+  apply H0.
+*)  
+  
+  
+  
 (************************************************************)
 
 (*** Module for Ocaml extraction  ***)
@@ -1974,10 +1999,14 @@ Definition eliminate_connective f : Thm :=
 
 (********* interactive proof style *********)
 
+Definition Justification (hypos: list formula) (conclusion: formula) :=  |- formulas_conj_alt hypos ==> conclusion.
+
+Notation "hyps '|?-' ccl" := (Justification hyps ccl) (at level 150, right associativity).
+
 Record goal: Type := {
     hypothesises: list formula;
     ccl: formula;
-    justification: |- formulas_conj_alt hypothesises ==> ccl
+    justification: hypothesises |?- ccl
   }.
 
 Lemma close_goal (g: goal) (t: tuple (map (fun x => |- x) (hypothesises g) )): |- ccl g.
@@ -2064,6 +2093,15 @@ we can replace p_i by the q_0, ..., q_m
 
 same remarque as above
 
+We also provide the alternative
+
+given
+|- p_0 /\ ... /\ p_i /\ ... /\ p_n -> g
+|- q_0 -> ... -> q_m -> p_i
+
+we can replace p_i by the q_0, ..., q_m
+|- p_0 /\ ... /\ q_0 /\ ... /\ q_m /\ p_n -> g
+
 *)
 
 Lemma formulas_conj_incl_m {V} (m: @Model V) (l1 l2: list formula):
@@ -2120,6 +2158,40 @@ Program Definition apply_to_goal (g: goal)
     ccl := ccl g;
     justification := generalize_implication (justification g) H
   |}.
+
+Lemma generalize_implication2
+  {l1: list formula} {ccl1: formula}
+  {l2: list formula} {ccl2: formula}  
+  :
+  forall
+    (H1: |- formulas_conj_alt l1 ==> ccl1)
+    (H2: |- formulas_imp l2 ccl2)
+    , |- formulas_conj_alt (replace_dec formula_dec ccl2 l2 l1) ==> ccl1.
+  intros.
+  apply generalize_implication; auto.
+  rewrite <- formulas_conj_alt_eq_validity2.
+  red; intros.
+  rewrite build_conj_imp_equiv.
+  apply H2; auto.
+Qed.
+  
+Program Definition apply_to_goal2 (g: goal)
+  {l_hyps: list formula} {l_ccl: formula}
+  (H: |- formulas_imp l_hyps l_ccl): goal :=
+  {|
+    hypothesises:= (replace_dec formula_dec l_ccl l_hyps (hypothesises g));
+    ccl := ccl g;
+    justification := generalize_implication2 (justification g) H
+  |}.
+
+(* check *)
+Lemma solved_hypothesis2 {l: list formula} {ccl: formula} {p: formula}:
+  forall
+    (H: |- p)
+    (H1: |- formulas_conj_alt l ==> ccl)
+  , |- formulas_conj_alt (remove_dec formula_dec p l) ==> ccl.
+  strivial use: @solved_hypothesis.
+Qed.
 
 (***********)
 
