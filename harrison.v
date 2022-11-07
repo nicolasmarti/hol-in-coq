@@ -1996,12 +1996,12 @@ Definition eq_trans (s t u: term): |- (s == t) ==> (t == u) ==> (s == u) := lemm
 
 Definition Justification (hypos: list formula) (conclusion: formula) :=  |- formulas_conj_alt hypos ==> conclusion.
 
-Notation "hyps '|?-' ccl" := (Justification hyps ccl) (at level 150, right associativity).
+Notation "hyps '|--' ccl" := (Justification hyps ccl) (at level 150, right associativity).
 
 Record goal: Type := {
     hypothesises: list formula;
     ccl: formula;
-    justification: hypothesises |?- ccl
+    justification: hypothesises |-- ccl
   }.
 
 Lemma close_goal (g: goal) (t: tuple (map (fun x => |- x) (hypothesises g) )): |- ccl g.
@@ -2049,10 +2049,10 @@ but here: (2) -> (1) -> (3)
 Lemma solved_hypothesis {l: list formula} {ccl: formula} {p: formula}:
   forall
     (H: |- p)
-    (H1: |- formulas_conj_alt l ==> ccl)
-    , |- formulas_conj_alt (remove_dec formula_dec p l) ==> ccl.
+    (H1: l |-- ccl)
+    ,  (remove_dec formula_dec p l) |-- ccl.
   intros.
-
+  red; red in H1.
   rewrite <- formulas_conj_alt_eq_validity2.
   rewrite <- formulas_conj_alt_eq_validity2 in H1.
   
@@ -2115,11 +2115,12 @@ Lemma generalize_implication
   {l2: list formula} {ccl2: formula}  
   :
   forall
-    (H1: |- formulas_conj_alt l1 ==> ccl1)
-    (H2: |- formulas_conj_alt l2 ==> ccl2)
-    , |- formulas_conj_alt (replace_dec formula_dec ccl2 l2 l1) ==> ccl1.
+    (H1: l1 |-- ccl1)
+    (H2: l2 |-- ccl2)
+    , (replace_dec formula_dec ccl2 l2 l1) |-- ccl1.
   intros.
-
+  red in H1; red in H2; red.
+  
   rewrite <- formulas_conj_alt_eq_validity2.
   rewrite <- formulas_conj_alt_eq_validity2 in H1.
   rewrite <- formulas_conj_alt_eq_validity2 in H2.
@@ -2159,11 +2160,13 @@ Lemma generalize_implication2
   {l2: list formula} {ccl2: formula}  
   :
   forall
-    (H1: |- formulas_conj_alt l1 ==> ccl1)
-    (H2: |- formulas_imp l2 ccl2)
-    , |- formulas_conj_alt (replace_dec formula_dec ccl2 l2 l1) ==> ccl1.
+    (H1: l1 |-- ccl1)
+    (H2: |- formulas_imp l2 ccl2),
+    (replace_dec formula_dec ccl2 l2 l1) |-- ccl1.
   intros.
+  red in H1; red.
   apply generalize_implication; auto.
+  red.
   rewrite <- formulas_conj_alt_eq_validity2.
   red; intros.
   rewrite build_conj_imp_equiv.
@@ -2183,8 +2186,8 @@ Program Definition apply_to_goal2 (g: goal)
 Lemma solved_hypothesis2 {l: list formula} {ccl: formula} {p: formula}:
   forall
     (H: |- p)
-    (H1: |- formulas_conj_alt l ==> ccl)
-  , |- formulas_conj_alt (remove_dec formula_dec p l) ==> ccl.
+    (H1: l |-- ccl),
+    (remove_dec formula_dec p l) |-- ccl.
   strivial use: @solved_hypothesis.
 Qed.
 
