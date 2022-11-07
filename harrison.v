@@ -9,7 +9,7 @@ thoughts/points:
   => decision procedure as tactics [more flexible, no extraction]
   => testing a few Coq tools (e.g., coq-hammer ... elpi )
 
-- non structural recursive definition of term
+- non primitive structural recursive definition of term
   => requires a taylor made induction principle 
      (based on Program/measure)
   => for each constructor applied to the induction predicate, 
@@ -18,14 +18,18 @@ thoughts/points:
 
 - usual logic's notions:
   ==> a model maps terms to values, and propositions to booleans/Prop@coq
-  ==> a model satifies a formula := the model evaluates the formula to true/True (m |= f)
-  ==> validity of a formula := all model satifies the formula       (|- m := V m, m |= f)
+  ==> a model satifies a formula := the model evaluates the formula to true/True 
+      (m |= f)
+  ==> validity of a formula := all model satifies the formula
+      (|- m := V m, m |= f)
+
 
 - need a dependent type bearing: (1) a formula and, (2) its proof. Otherwise, 
   extracting a function/lemma based purely on (|-) leads to an empty Ocaml code 
   [c.f. illustrating extraction of modusponens and modusponens_thm]
+  ==> also provide generic lemmas for conversion
 
-- in Harrison, equality is defined as a predicate. 
+- in Harrison, equality is the predicate ("="). 
   We made it a formula constructor, for the following reasons:
   ==> if defined as a predicate, models needs extra assumptions
       [ the semantics of the predicate "=" ]
@@ -33,17 +37,24 @@ thoughts/points:
   This modification has a consequence: we need to add some extra rules in the kernel.
   Harrison only required reflexivity, we will need to add commutativity and transitivity.
 
-- sometimes Program generates opaque obligations:
+- sometime Program generates opaque obligations:
   ==> where are they coming from ?
   ==> what is their purpose ?
   ==> how can they be proved ? (tactics knows ... not me)
 
-- We have validity schemas :
+- We have validity schemas with variable numbers of premises :
   (e.g.,  |- p_0 ==> ... ==> p_n ==> p_i { for i in [0, n] })
   (e.g.,  |- p_0 //\\ ... //\\ p_n ==> p_i { for i in [0, n] })
   for those, dependent types are of essence, but not easy to apply 
   (for use case for reification by tactics)
 
+*)
+
+(*
+  In progress:  
+  6.6: Proving Tautologies by inference
+  6.7: First Order Derivatives Rules
+  6.9: Interactive Proof Styles
 *)
 
 (*
@@ -60,6 +71,8 @@ stupid ideas:
 - connection with why3 ??
 - coq-hammer: could it helps quantifying what are the proper lemmas ??
   ==> the more all lemmas are automatically provable, the better the formalization in terms of elementary/helper lemmas
+  ==> could we test/quantify this ? take a well known theory [e.g., binary number], and a goal lemma (signed/unsigned addition circuit/algo)
+      - 
 *)
 
 Require Import Bool.
@@ -391,7 +404,7 @@ Qed.
 
 (* Maybe the most interesting point of this formalization: terms
   cannot be used with the usual inductive type mechanism of Coq. So we
-  need to redefine the recursion scheme. The key point is that all
+   need to redefine the recursion scheme. The key point is that all
   terms explored are subterms [!not clear!]<possibly interesting point
   for more generic induction scheme>. Furthermore, we define a lemma
   for rewriting the induction lemma applied to each constructors
@@ -770,22 +783,6 @@ Definition is_valid (f: formula) : Prop :=
     m |= f.
 
 Notation "'|-' f" := (is_valid f) (at level 150, right associativity).
-
-(*
-Lemma validity_satisfiability (f1 f2: formula):
-  ( forall {V} (m: @Model V), (m |= f1) <-> (m |= f2) ) <-> ( (|- f1) <-> (|- f2) ).
-  split; intro H.
-  split; intros; red; intros.
-  rewrite <- (H).
-  apply H0.
-  rewrite (H).
-  apply H0.
-  inversion_clear H.
-  intros; split; intros.
-  apply H0.
-*)  
-  
-  
   
 (************************************************************)
 
@@ -823,10 +820,10 @@ Module Type ProofSystem.
   (*  |- t = t                                                                 *)
   Parameter axiom_eqrefl: term -> Thm.
 
-  (*  |- t = s ==> s |- t *)
+  (*  |- t = s ==> s = t *)
   Parameter axiom_eqcomm: term -> term -> Thm.
 
-  (*  |- t = s ==> s |- r ==> t = r *)
+  (*  |- t = s ==> s = r ==> t = r *)
   Parameter axiom_eqtrans: term -> term -> term -> Thm.
   
   (*  |- s1 = t1 ==> ... ==> sn = tn ==> f(s1,..,sn) = f(t1,..,tn)             *)
@@ -860,6 +857,8 @@ Module Type ProofSystem.
   Parameter axiom_exists: string -> formula -> Thm.
 
 End ProofSystem.
+
+(* Implementation for a Module of type ProofSystem *)
 
 (* we defined those outside because we will reuse them later *)
 Definition Thm := { f: formula | |- f }.
@@ -924,7 +923,6 @@ Qed.
 
 (* .. hence the need of the dependent type for generating genuine OCaml code *)
 Extraction "test2.ml" modusponens_thm.
-
 
 (**)
 
@@ -1834,16 +1832,6 @@ Lemma unshunt {p q r} (H: |- p ==> q ==> r): |- p //\\ q ==> r.
   auto.
 Qed.
 
-(************************************************************)
-
-(******* FOL lemmas *************)
-
-(* FOL lemmas *)
-Definition eq_sym (s t: term): |- (s == t) ==> (t == s) := lemma_eqcomm s t.
-
-Definition eq_trans (s t u: term): |- (s == t) ==> (t == u) ==> (s == u) := lemma_eqtrans s t u.
-
-(*to continue*)
 
 (************************************************************)
 (****** p. 506 => tableau procedure ********)
@@ -1870,7 +1858,6 @@ Qed.
 Definition iff_refl (p: formula): |- p <=> p.
   red; intros; sauto.
 Qed.
-
 
 
 (***)
@@ -1905,11 +1892,6 @@ Definition negatef (f: formula): formula :=
   | p ==> ffalse => p
   | p => p ==> ffalse
   end.
-
-Check bool.
-Check (true:bool).
-
-Print bool.
 
 Definition negativef (f: formula): bool :=
   match f with
@@ -1969,31 +1951,44 @@ Qed.
 Next Obligation.
   sauto. (* I absolutely do not understand ... *)
 Qed.
-
   
 (* usage *)
 
-Check @iff_imp1.
-(* forall p q : formula, (|- p <=> q) -> |- p ==> q *)
-Check (fun p q => prfthm_2 (@iff_imp1 p q)).
-(* : formula -> formula -> Thm -> Thm *)
-Check (fun p q r => prfthm_2 (@imp_add_concl p q r)).
-(* formula -> formula -> formula -> Thm -> Thm *)
-(**)
+Definition iff_imp1_thm (t: Thm (* |- p <=> q *)): Thm (* |- p ==> q *) :=
+  match concl t with
+  | p <=> q => prfthm_2 (@iff_imp1 p q) t
+  | _ => T_Thm
+  end.
 
-Check imp_add_concl.
+Definition iff_imp2_thm (t: Thm (* |- p <=> q *)): Thm  (* |- q ==> p *) :=
+  match concl t with
+  | p <=> q => prfthm_2 (@iff_imp2 p q) t
+  | _ => T_Thm
+  end.
 
-(* missing implicit arguments ... not sure to understand *)
+Definition imp_add_concl_thm r (t: Thm (* |- p ==> q *)) : Thm (* |- (q ==> r) ==> (p ==> r) *) :=
+  match concl t with
+  | p ==> q => prfthm_2 (@imp_add_concl p q r) t
+  | _ => T_Thm
+  end.
 
-Check (fun f => (prfthm_2 iff_imp1) (expand_connective f)).
-
-(*
 Definition eliminate_connective f : Thm :=
   if negb (negativef f) then
-    (prfthm_2 iff_imp1) (expand_connective f)
+    iff_imp1_thm (expand_connective f)
   else
-    (fun r => prfthm_2 (imp_add_concl r)) ffalse ((prfthm_2 iff_imp2) (expand_connective(negatef f))).
-*)
+    imp_add_concl_thm ffalse (iff_imp2_thm (expand_connective (negatef f))).
+
+
+(************************************************************)
+
+(******* FOL lemmas *************)
+
+(* FOL lemmas *)
+Definition eq_sym (s t: term): |- (s == t) ==> (t == s) := lemma_eqcomm s t.
+
+Definition eq_trans (s t u: term): |- (s == t) ==> (t == u) ==> (s == u) := lemma_eqtrans s t u.
+
+(*to continue*)
 
 (************************************************************)
 
