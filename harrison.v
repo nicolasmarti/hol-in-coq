@@ -2102,6 +2102,12 @@ but here: (2) -> (1) -> (3)
 
 *)
 
+(*
+  another transparent
+*)
+
+Transparent is_valid.
+
 Lemma solved_hypothesis {l: list formula} {ccl: formula} {p: formula}:
   forall
     (H: |- p)
@@ -2111,7 +2117,6 @@ Lemma solved_hypothesis {l: list formula} {ccl: formula} {p: formula}:
   red; red in H1.
   rewrite <- formulas_conj_alt_eq_validity2.
   rewrite <- formulas_conj_alt_eq_validity2 in H1.
-  
   red; intros.
   intro.
   rewrite <- conj_forall_eq_m in H0.
@@ -2125,6 +2130,10 @@ Lemma solved_hypothesis {l: list formula} {ccl: formula} {p: formula}:
   apply H0.
   apply remove_dec_in2; auto.
 Qed.  
+
+Opaque is_valid.
+
+(**)
 
 Program Definition solve_hypothesis (g: goal) {p} (H: |- p): goal :=
   {|
@@ -2166,6 +2175,12 @@ Lemma formulas_conj_incl_m {V} (m: @Model V) (l1 l2: list formula):
   sauto.
 Qed.
 
+(*
+  again ...
+*)
+
+Transparent is_valid.
+
 Lemma generalize_implication
   {l1: list formula} {ccl1: formula}
   {l2: list formula} {ccl2: formula}  
@@ -2202,6 +2217,10 @@ Lemma generalize_implication
   sauto.
 Qed.
 
+Opaque is_valid.
+
+(**)
+
 Program Definition apply_to_goal (g: goal)
   {l_hyps: list formula} {l_ccl: formula}
   (H: |- formulas_conj l_hyps ==> l_ccl): goal :=
@@ -2210,6 +2229,9 @@ Program Definition apply_to_goal (g: goal)
     ccl := ccl g;
     justification := generalize_implication (justification g) H
   |}.
+
+(* *)
+Transparent is_valid.
 
 Lemma generalize_implication2
   {l1: list formula} {ccl1: formula}
@@ -2228,7 +2250,10 @@ Lemma generalize_implication2
   rewrite build_conj_imp_equiv.
   apply H2; auto.
 Qed.
-  
+
+Opaque is_valid.
+(**)
+
 Program Definition apply_to_goal2 (g: goal)
   {l_hyps: list formula} {l_ccl: formula}
   (H: |- formulas_imp l_hyps l_ccl): goal :=
@@ -2237,8 +2262,6 @@ Program Definition apply_to_goal2 (g: goal)
     ccl := ccl g;
     justification := generalize_implication2 (justification g) H
   |}.
-
-Extraction "harrison.ml" Proven.
 
 (* check *)
 Lemma solved_hypothesis2 {l: list formula} {ccl: formula} {p: formula}:
@@ -2268,7 +2291,6 @@ cmd "x y" => y / z.
 
 
 Lemma l {p q}: |- (p <=> q) ==> p.
-  red; intros.
   elpi tac.
 Abort.
 
