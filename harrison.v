@@ -2008,6 +2008,14 @@ Definition imp_add_concl_thm r (t: Thm (* |- p ==> q *)) : Thm (* |- (q ==> r) =
   | _ => T_Thm
   end.
 
+Definition eliminate_connective f : Thm :=
+  if negb (negativef f) then
+    iff_imp1_thm (expand_connective f)
+  else
+    imp_add_concl_thm ffalse (iff_imp2_thm (expand_connective (negatef f))).
+
+(* TODO *)
+
 (*
 Definition p: formula := Atom "p" [].
 Definition q: formula := Atom "q" [].
@@ -2020,14 +2028,10 @@ Eval lazy in (concl p_imp_q_thm).
 Definition q_imp_p_thm := iff_imp2_thm p_iff_q_thm.
 Eval lazy in (concl q_imp_p_thm).
 Eval lazy in (concl (imp_add_concl_thm r p_imp_q_thm)).
- *)
-
-Definition eliminate_connective f : Thm :=
-  if negb (negativef f) then
-    iff_imp1_thm (expand_connective f)
-  else
-    imp_add_concl_thm ffalse (iff_imp2_thm (expand_connective (negatef f))).
-
+Definition f := p <=> q ==> ~~ r.
+Eval lazy in (concl (eliminate_connective f)).
+*)
+               
 (************************************************************)
 
 (******* FOL lemmas *************)
