@@ -73,6 +73,18 @@ stupid ideas:
   ==> the more all lemmas are automatically provable, the better the formalization in terms of elementary/helper lemmas
   ==> could we test/quantify this ? take a well known theory [e.g., binary number], and a goal lemma (signed/unsigned addition circuit/algo)
       - 
+
+- could be usefull to make definition Opaque for testing if
+  one is truly reusing helper lemma, and not reducing the goal
+  definitions and solving in a bit more brute force.
+
+- how to discriminate which definition (and possibly program obligation)
+  to be made Opaque ???
+
+- that would be nice to have a "free" window in proof general
+  ==> input some test Definition, Axioms, Commands, ... [showing not the latest input but full trace]
+  ==> to be evaluated using the current state of Coq [debugging, so far so good ...]
+
 *)
 
 Require Import Bool.
@@ -873,9 +885,9 @@ Definition prf (thm: Thm): |- concl thm :=
     | exist _ _ p => p
     end.
 
-Definition mkThm f prf: Thm := exist is_valid f prf .
+Definition mkThm f prf: Thm := exist is_valid f prf.
 
-Definition mkThm2 {f} ( prf: |- f ) : Thm := exist is_valid f prf .
+Definition mkThm2 {f} ( prf: |- f ) : Thm := exist is_valid f prf.
 
 Program Definition T_Thm := exist is_valid ftrue _.
 Next Obligation.
@@ -1460,7 +1472,10 @@ Qed.
 
 Program Definition predcong_thm (P: string) (lhs rhs: list term) : Thm :=
     mkThm _ (lemma_predcong P (zip lhs rhs)).
-  
+
+(* making is_valid Opaque (making sure we only reuse the base rules) *)
+Opaque is_valid.
+
 (** the lcf kernel as a extractable module **)
   
 Module Proven: ProofSystem.
@@ -1691,7 +1706,13 @@ Qed.
 second instance with inference rules over formulas with variable
 number of elements.
 
+We need to make is_valid transparent 
+- could we avoid it ?
+- should we move those definition above
+
 *)
+
+Transparent is_valid.
 
 Lemma tuple_formulas_conj: forall
     (l: list formula)
@@ -1744,6 +1765,10 @@ Lemma imp_trans_chain :
   auto.
 Qed.
 
+Opaque is_valid.
+
+(**)
+
 Lemma imp_truefalse p q: |- (q ==> ffalse) ==> p ==> (p ==> q) ==> ffalse.
   apply ( imp_trans
             (imp_trans_th p q ffalse)
@@ -1788,6 +1813,12 @@ Lemma and_right p q: |- p //\\ q ==> q.
         ).
 Qed.
 
+(* once again, I think it make it clear that the lemmas  
+   set is not properly set ...
+*)
+
+Transparent is_valid.
+
 Lemma conjths {l: list formula}:
   forall
     p, In p l ->
@@ -1798,6 +1829,10 @@ Lemma conjths {l: list formula}:
   rewrite <- conj_forall_eq_m in H0.
   sauto.
 Qed.
+
+Opaque is_valid.
+
+(**)
 
 Lemma and_pair p q: |- p ==> q ==> p //\\ q.
   generalize (iff_imp2 (lemma_and p q)); intro H1.
@@ -1856,7 +1891,7 @@ Lemma iff_def p q: |- (p <=> q) <=> ((p ==> q) //\\ (q ==> p)).
 Qed.
 
 Definition iff_refl (p: formula): |- p <=> p.
-  red; intros; sauto.
+  exact (modusponens (modusponens (lemma_impiff p p) (imp_refl p)) (imp_refl p)).
 Qed.
 
 
@@ -1906,10 +1941,11 @@ Definition negativef (f: formula): bool :=
 *)
 Program Definition prfthm_2 {p q} (H: (|- p) -> |- q) (thm: Thm): Thm :=
   match formula_dec p (concl thm) with
-  | left Heq => mkThm q (H _)
+  | left Heq => mkThm q _
   | right _ => T_Thm
   end.
 Next Obligation.
+  apply H.
   sauto. (* I absolutely do not understand ... *)
 Qed.
 
@@ -1968,16 +2004,29 @@ Definition iff_imp2_thm (t: Thm (* |- p <=> q *)): Thm  (* |- q ==> p *) :=
 
 Definition imp_add_concl_thm r (t: Thm (* |- p ==> q *)) : Thm (* |- (q ==> r) ==> (p ==> r) *) :=
   match concl t with
-  | p ==> q => prfthm_2 (@imp_add_concl p q r) t
+  | p ==> q => prfthm_2 (@imp_add_concl r p q) t
   | _ => T_Thm
   end.
+
+(*
+Definition p: formula := Atom "p" [].
+Definition q: formula := Atom "q" [].
+Definition r: formula := Atom "r" [].
+Axiom p_iff_q: |- p <=> q.
+Definition p_iff_q_thm := mkThm2 p_iff_q.
+Eval lazy in (concl p_iff_q_thm).
+Definition p_imp_q_thm := iff_imp1_thm p_iff_q_thm.
+Eval lazy in (concl p_imp_q_thm).
+Definition q_imp_p_thm := iff_imp2_thm p_iff_q_thm.
+Eval lazy in (concl q_imp_p_thm).
+Eval lazy in (concl (imp_add_concl_thm r p_imp_q_thm)).
+ *)
 
 Definition eliminate_connective f : Thm :=
   if negb (negativef f) then
     iff_imp1_thm (expand_connective f)
   else
     imp_add_concl_thm ffalse (iff_imp2_thm (expand_connective (negatef f))).
-
 
 (************************************************************)
 
@@ -1994,9 +2043,12 @@ Definition eq_trans (s t u: term): |- (s == t) ==> (t == u) ==> (s == u) := lemm
 
 (********* interactive proof style *********)
 
+(* the dependent type *)
 Definition Justification (hypos: list formula) (conclusion: formula) :=  |- formulas_conj_alt hypos ==> conclusion.
 
 Notation "hyps '|--' ccl" := (Justification hyps ccl) (at level 150, right associativity).
+
+(* the datatype *)
 
 Record goal: Type := {
     hypothesises: list formula;
@@ -2181,6 +2233,8 @@ Program Definition apply_to_goal2 (g: goal)
     ccl := ccl g;
     justification := generalize_implication2 (justification g) H
   |}.
+
+Extraction "harrison.ml" Proven.
 
 (* check *)
 Lemma solved_hypothesis2 {l: list formula} {ccl: formula} {p: formula}:
