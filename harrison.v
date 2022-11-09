@@ -33,9 +33,9 @@ thoughts/points:
   We made it a formula constructor, for the following reasons:
   ==> if defined as a predicate, models needs extra assumptions
       [ the semantics of the predicate "=" ]
-  ==> equality is an ubiquitous primitive for reasoning systems (e.g., superposition)
+  ==> equality is the most primitive equivalence for reasoning systems (e.g., superposition)
   This modification has a consequence: we need to add some extra rules in the kernel.
-  Harrison only required reflexivity, we will need to add commutativity and transitivity.
+  Harrison only required reflexivity, we will need to add symmetry and transitivity.
 
 - sometime Program generates opaque obligations:
   ==> where are they coming from ?
@@ -833,7 +833,7 @@ Module Type ProofSystem.
   Parameter axiom_eqrefl: term -> Thm.
 
   (*  |- t = s ==> s = t *)
-  Parameter axiom_eqcomm: term -> term -> Thm.
+  Parameter axiom_eqsymm: term -> term -> Thm.
 
   (*  |- t = s ==> s = r ==> t = r *)
   Parameter axiom_eqtrans: term -> term -> term -> Thm.
@@ -1064,14 +1064,14 @@ Program Definition eqrefl_thm (t: term): Thm :=
 
 (**)
 
-Lemma lemma_eqcomm (t s: term):
+Lemma lemma_eqsymm (t s: term):
   |- t == s ==> s == t.
   red; intros.
   red; auto.
 Qed.
 
-Program Definition eqcomm_thm (t s: term): Thm :=
-  mkThm _ (lemma_eqcomm t s).    
+Program Definition eqsymm_thm (t s: term): Thm :=
+  mkThm _ (lemma_eqsymm t s).    
 
 (**)
 
@@ -1524,7 +1524,7 @@ Module Proven: ProofSystem.
   Definition axiom_eqrefl (t: term): Thm := eqrefl_thm t.
   
   (*  |- t = s ==> s |- t *)
-  Definition axiom_eqcomm (t s: term): Thm := eqcomm_thm t s.
+  Definition axiom_eqsymm (t s: term): Thm := eqsymm_thm t s.
 
   (*  |- t = s ==> s |- r ==> t = r *)
   Definition axiom_eqtrans (t s r: term): Thm := eqtrans_thm t s r.
@@ -2037,7 +2037,7 @@ Eval lazy in (concl (eliminate_connective f)).
 (******* FOL lemmas *************)
 
 (* FOL lemmas *)
-Definition eq_sym (s t: term): |- (s == t) ==> (t == s) := lemma_eqcomm s t.
+Definition eq_sym (s t: term): |- (s == t) ==> (t == s) := lemma_eqsymm s t.
 
 Definition eq_trans (s t u: term): |- (s == t) ==> (t == u) ==> (s == u) := lemma_eqtrans s t u.
 
