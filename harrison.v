@@ -1,5 +1,4 @@
 (*
-
 thoughts/points:
 
 - original goal: formalizing Chapter 6 of Harrison's 
@@ -23,8 +22,7 @@ thoughts/points:
   ==> validity of a formula := all model satifies the formula
       (|- m := V m, m |= f)
 
-
-- need a dependent type bearing: (1) a formula and, (2) its proof. Otherwise, 
+- need a dependent type with: (1) a formula and, (2) its proof. Otherwise, 
   extracting a function/lemma based purely on (|-) leads to an empty Ocaml code 
   [c.f. illustrating extraction of modusponens and modusponens_thm]
   ==> also provide generic lemmas for conversion
@@ -1813,9 +1811,7 @@ Lemma and_right p q: |- p //\\ q ==> q.
         ).
 Qed.
 
-(* once again, I think it make it clear that the lemmas  
-   set is not properly set ...
-*)
+(* ... *)
 
 Transparent is_valid.
 
