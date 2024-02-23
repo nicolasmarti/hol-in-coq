@@ -19,8 +19,7 @@ let rec app l m =
   | [] -> m
   | a :: l1 -> a :: (app l1 m)
 
-type 'a sig0 =
-  'a
+type 'a sig0 = 'a
   (* singleton inductive, whose constructor was exist *)
 
 type ('a, 'p) sigT =
@@ -38,22 +37,17 @@ let projT2 = function
 
 
 
-(** val in_dec :
-    ('a1 -> 'a1 -> bool) -> 'a1 -> 'a1 list -> bool **)
+(** val in_dec : ('a1 -> 'a1 -> bool) -> 'a1 -> 'a1 list -> bool **)
 
 let rec in_dec h a = function
 | [] -> false
 | y :: l0 -> let s = h y a in if s then true else in_dec h a l0
 
-(** val remove :
-    ('a1 -> 'a1 -> bool) -> 'a1 -> 'a1 list -> 'a1 list **)
+(** val remove : ('a1 -> 'a1 -> bool) -> 'a1 -> 'a1 list -> 'a1 list **)
 
 let rec remove eq_dec x = function
 | [] -> []
-| y :: tl ->
-  if eq_dec x y
-  then remove eq_dec x tl
-  else y :: (remove eq_dec x tl)
+| y :: tl -> if eq_dec x y then remove eq_dec x tl else y :: (remove eq_dec x tl)
 
 (** val concat : 'a1 list list -> 'a1 list **)
 
@@ -61,8 +55,7 @@ let rec concat = function
 | [] -> []
 | x :: l0 -> app x (concat l0)
 
-(** val list_eq_dec :
-    ('a1 -> 'a1 -> bool) -> 'a1 list -> 'a1 list -> bool **)
+(** val list_eq_dec : ('a1 -> 'a1 -> bool) -> 'a1 list -> 'a1 list -> bool **)
 
 let rec list_eq_dec eq_dec l l' =
   match l with
@@ -72,8 +65,7 @@ let rec list_eq_dec eq_dec l l' =
   | y :: l0 ->
     (match l' with
      | [] -> false
-     | a :: l1 ->
-       if eq_dec y a then list_eq_dec eq_dec l0 l1 else false)
+     | a :: l1 -> if eq_dec y a then list_eq_dec eq_dec l0 l1 else false)
 
 (** val map : ('a1 -> 'a2) -> 'a1 list -> 'a2 list **)
 
@@ -88,94 +80,82 @@ let rec string_dec s x =
   | [] -> (match x with
            | [] -> true
            | _::_ -> false)
-  | a::s0 ->
-    (match x with
-     | [] -> false
-     | a0::s1 -> if (=) a a0 then string_dec s0 s1 else false)
+  | a::s0 -> (match x with
+              | [] -> false
+              | a0::s1 -> if (=) a a0 then string_dec s0 s1 else false)
 
-(** val list_dec_obligation_1 :
-    'a1 list -> ('a1 -> __ -> 'a1 -> bool) -> 'a1 list -> bool **)
+(** val list_dec_obligation_1 : 'a1 list -> ('a1 -> __ -> 'a1 -> bool) -> 'a1 list -> bool **)
 
 let list_dec_obligation_1 _ _ = function
 | [] -> true
 | _ :: _ -> false
 
 (** val list_dec_obligation_2 :
-    'a1 list -> ('a1 -> __ -> 'a1 -> bool) -> 'a1 list -> 'a1 ->
-    'a1 list -> ('a1 list -> bool) -> bool **)
+    'a1 list -> ('a1 -> __ -> 'a1 -> bool) -> 'a1 list -> 'a1 -> 'a1 list -> ('a1 list -> bool) ->
+    bool **)
 
 let list_dec_obligation_2 _ a_dec l2 hd _ x =
   match l2 with
   | [] -> false
-  | a :: l -> if a_dec hd __ a then x l else false
+  | a :: l -> let h0 = a_dec hd __ a in if h0 then x l else false
 
 (** val list_dec_obligation_3 :
-    'a1 list -> ('a1 -> __ -> 'a1 -> bool) -> 'a1 -> 'a1 list ->
-    'a1 -> 'a1 -> bool **)
+    'a1 list -> ('a1 -> __ -> 'a1 -> bool) -> 'a1 -> 'a1 list -> 'a1 -> 'a1 -> bool **)
 
 let list_dec_obligation_3 _ a_dec _ _ a1 a2 =
   a_dec a1 __ a2
 
-(** val list_dec :
-    'a1 list -> ('a1 -> __ -> 'a1 -> bool) -> 'a1 list -> bool **)
+(** val list_dec : 'a1 list -> ('a1 -> __ -> 'a1 -> bool) -> 'a1 list -> bool **)
 
 let rec list_dec l1 a_dec l2 =
   match l1 with
   | [] -> list_dec_obligation_1 l1 a_dec l2
   | hd :: tl ->
     list_dec_obligation_2 l1 a_dec l2 hd tl
-      (list_dec tl (fun a1 _ a2 ->
-        list_dec_obligation_3 l1 a_dec hd tl a1 a2))
+      (list_dec tl (fun a1 _ a2 -> list_dec_obligation_3 l1 a_dec hd tl a1 a2))
 
 (** val zip : 'a1 list -> 'a2 list -> ('a1 * 'a2) list **)
 
 let rec zip l1 l2 =
   match l1 with
   | [] -> []
-  | hd1 :: tl1 ->
-    (match l2 with
-     | [] -> []
-     | hd2 :: tl2 -> (hd1, hd2) :: (zip tl1 tl2))
+  | hd1 :: tl1 -> (match l2 with
+                   | [] -> []
+                   | hd2 :: tl2 -> (hd1, hd2) :: (zip tl1 tl2))
 
 (** val unzip : ('a1 * 'a2) list -> 'a1 list * 'a2 list **)
 
 let rec unzip = function
 | [] -> ([], [])
-| p :: tl ->
-  let (hd1, hd2) = p in
-  let (tl1, tl2) = unzip tl in ((hd1 :: tl1), (hd2 :: tl2))
+| p :: tl -> let (hd1, hd2) = p in let (tl1, tl2) = unzip tl in ((hd1 :: tl1), (hd2 :: tl2))
 
 type term =
 | Var of char list
 | Fn of char list * term list
 
 (** val term_recursion_func :
-    (term, (__, (char list -> __, char list -> term list ->
-    (term -> __ -> __) -> __) sigT) sigT) sigT -> __ **)
+    (term, (__, (char list -> __, char list -> term list -> (term -> __ -> __) -> __) sigT) sigT)
+    sigT -> __ **)
 
 let rec term_recursion_func x =
   let t = projT1 x in
   let p_var = projT1 (projT2 (projT2 x)) in
   let p_fn = projT2 (projT2 (projT2 x)) in
   let term_recursion0 = fun t0 p_var0 p_fn0 ->
-    term_recursion_func (ExistT (t0, (ExistT (__, (ExistT
-      (p_var0, p_fn0))))))
+    term_recursion_func (ExistT (t0, (ExistT (__, (ExistT (p_var0, p_fn0))))))
   in
   (match t with
    | Var s -> p_var s
-   | Fn (s, l) ->
-     p_fn s l (fun x0 _ -> term_recursion0 x0 p_var p_fn))
+   | Fn (s, l) -> p_fn s l (fun x0 _ -> term_recursion0 x0 p_var p_fn))
 
 (** val term_recursion :
-    term -> (char list -> 'a1) -> (char list -> term list ->
-    (term -> __ -> 'a1) -> 'a1) -> 'a1 **)
+    term -> (char list -> 'a1) -> (char list -> term list -> (term -> __ -> 'a1) -> 'a1) -> 'a1 **)
 
 let term_recursion t p_var p_fn =
-  Obj.magic term_recursion_func (ExistT (t, (ExistT (__, (ExistT
-    ((Obj.magic p_var), (Obj.magic p_fn)))))))
+  Obj.magic term_recursion_func (ExistT (t, (ExistT (__, (ExistT ((Obj.magic p_var),
+    (Obj.magic p_fn)))))))
 
-(** val map_term :
-    term list -> (term -> __ -> 'a1) -> 'a1 list **)
+(** val map_term : term list -> (term -> __ -> 'a1) -> 'a1 list **)
 
 let rec map_term l p =
   match l with
@@ -189,25 +169,21 @@ let term_eq_dec_obligation_1 s = function
 | Fn (_, _) -> false
 
 (** val term_eq_dec_obligation_2 :
-    char list -> term list -> (term -> __ -> term -> bool) ->
-    term -> bool **)
+    char list -> term list -> (term -> __ -> term -> bool) -> term -> bool **)
 
-let term_eq_dec_obligation_2 s l h = function
+let term_eq_dec_obligation_2 s l x = function
 | Var _ -> false
-| Fn (s0, l0) ->
-  if string_dec s s0 then list_dec l h l0 else false
+| Fn (s0, l0) -> if string_dec s s0 then list_dec l x l0 else false
 
 (** val term_eq_dec : term -> term -> bool **)
 
 let term_eq_dec t1 =
-  term_recursion t1 term_eq_dec_obligation_1
-    term_eq_dec_obligation_2
+  term_recursion t1 term_eq_dec_obligation_1 term_eq_dec_obligation_2
 
 (** val term_free_vars : term -> char list list **)
 
 let term_free_vars t =
-  term_recursion t (fun s -> s :: []) (fun _ l h ->
-    concat (map_term l h))
+  term_recursion t (fun s -> s :: []) (fun _ l h -> concat (map_term l h))
 
 type formula =
 | Ftrue
@@ -234,49 +210,38 @@ let rec formula_dec f x =
                | _ -> false)
   | Atom (s, l) ->
     (match x with
-     | Atom (s0, l0) ->
-       if string_dec s s0
-       then list_eq_dec term_eq_dec l l0
-       else false
+     | Atom (s0, l0) -> if string_dec s s0 then list_eq_dec term_eq_dec l l0 else false
      | _ -> false)
   | Eq (t, t0) ->
     (match x with
-     | Eq (t1, t2) ->
-       if term_eq_dec t t1 then term_eq_dec t0 t2 else false
+     | Eq (t1, t2) -> if term_eq_dec t t1 then term_eq_dec t0 t2 else false
      | _ -> false)
-  | Not f0 ->
-    (match x with
-     | Not f1 -> formula_dec f0 f1
-     | _ -> false)
+  | Not f0 -> (match x with
+               | Not f1 -> formula_dec f0 f1
+               | _ -> false)
   | And (f0, f1) ->
     (match x with
-     | And (f2, f3) ->
-       if formula_dec f0 f2 then formula_dec f1 f3 else false
+     | And (f2, f3) -> if formula_dec f0 f2 then formula_dec f1 f3 else false
      | _ -> false)
   | Or (f0, f1) ->
     (match x with
-     | Or (f2, f3) ->
-       if formula_dec f0 f2 then formula_dec f1 f3 else false
+     | Or (f2, f3) -> if formula_dec f0 f2 then formula_dec f1 f3 else false
      | _ -> false)
   | Imp (f0, f1) ->
     (match x with
-     | Imp (f2, f3) ->
-       if formula_dec f0 f2 then formula_dec f1 f3 else false
+     | Imp (f2, f3) -> if formula_dec f0 f2 then formula_dec f1 f3 else false
      | _ -> false)
   | Iff (f0, f1) ->
     (match x with
-     | Iff (f2, f3) ->
-       if formula_dec f0 f2 then formula_dec f1 f3 else false
+     | Iff (f2, f3) -> if formula_dec f0 f2 then formula_dec f1 f3 else false
      | _ -> false)
   | Forall (s, f0) ->
     (match x with
-     | Forall (s0, f1) ->
-       if string_dec s s0 then formula_dec f0 f1 else false
+     | Forall (s0, f1) -> if string_dec s s0 then formula_dec f0 f1 else false
      | _ -> false)
   | Exists (s, f0) ->
     (match x with
-     | Exists (s0, f1) ->
-       if string_dec s s0 then formula_dec f0 f1 else false
+     | Exists (s0, f1) -> if string_dec s s0 then formula_dec f0 f1 else false
      | _ -> false)
 
 (** val formula_free_vars : formula -> char list list **)
@@ -285,14 +250,10 @@ let rec formula_free_vars = function
 | Atom (_, args) -> concat (map term_free_vars args)
 | Eq (t1, t2) -> app (term_free_vars t1) (term_free_vars t2)
 | Not f0 -> formula_free_vars f0
-| And (f1, f2) ->
-  app (formula_free_vars f1) (formula_free_vars f2)
-| Or (f1, f2) ->
-  app (formula_free_vars f1) (formula_free_vars f2)
-| Imp (f1, f2) ->
-  app (formula_free_vars f1) (formula_free_vars f2)
-| Iff (f1, f2) ->
-  app (formula_free_vars f1) (formula_free_vars f2)
+| And (f1, f2) -> app (formula_free_vars f1) (formula_free_vars f2)
+| Or (f1, f2) -> app (formula_free_vars f1) (formula_free_vars f2)
+| Imp (f1, f2) -> app (formula_free_vars f1) (formula_free_vars f2)
+| Iff (f1, f2) -> app (formula_free_vars f1) (formula_free_vars f2)
 | Forall (x, f0) -> remove string_dec x (formula_free_vars f0)
 | Exists (x, f0) -> remove string_dec x (formula_free_vars f0)
 | _ -> []
@@ -321,11 +282,13 @@ module type ProofSystem =
 
   val axiom_eqrefl : term -> coq_Thm
 
-  val axiom_funcong :
-    char list -> term list -> term list -> coq_Thm
+  val axiom_eqsymm : term -> term -> coq_Thm
 
-  val axiom_predcong :
-    char list -> term list -> term list -> coq_Thm
+  val axiom_eqtrans : term -> term -> term -> coq_Thm
+
+  val axiom_funcong : char list -> term list -> term list -> coq_Thm
+
+  val axiom_predcong : char list -> term list -> term list -> coq_Thm
 
   val axiom_iffimp1 : formula -> formula -> coq_Thm
 
@@ -367,8 +330,7 @@ let modusponens_thm thm1 thm2 =
   let filtered_var = concl0 thm1 in
   (match filtered_var with
    | Imp (f1, f2) ->
-     let filtered_var0 = formula_dec f1 thm2 in
-     if filtered_var0 then mkThm f2 else t_Thm
+     let filtered_var0 = formula_dec f1 thm2 in if filtered_var0 then mkThm f2 else t_Thm
    | _ -> t_Thm)
 
 (** val gen_thm : char list -> thm -> thm **)
@@ -384,8 +346,7 @@ let addimp_thm p q =
 (** val distribimp_thm : formula -> formula -> formula -> thm **)
 
 let distribimp_thm p q r =
-  mkThm (Imp ((Imp (p, (Imp (q, r)))), (Imp ((Imp (p, q)), (Imp
-    (p, r))))))
+  mkThm (Imp ((Imp (p, (Imp (q, r)))), (Imp ((Imp (p, q)), (Imp (p, r))))))
 
 (** val doubleneg_thm : formula -> thm **)
 
@@ -395,29 +356,34 @@ let doubleneg_thm p =
 (** val allimp_thm : char list -> formula -> formula -> thm **)
 
 let allimp_thm x p q =
-  mkThm (Imp ((Forall (x, (Imp (p, q)))), (Imp ((Forall (x, p)),
-    (Forall (x, q))))))
+  mkThm (Imp ((Forall (x, (Imp (p, q)))), (Imp ((Forall (x, p)), (Forall (x, q))))))
 
 (** val impall_thm : char list -> formula -> thm **)
 
 let impall_thm x p =
   let filtered_var = in_dec string_dec x (formula_free_vars p) in
-  if filtered_var
-  then t_Thm
-  else mkThm (Imp (p, (Forall (x, p))))
+  if filtered_var then t_Thm else mkThm (Imp (p, (Forall (x, p))))
 
 (** val existseq_thm : char list -> term -> thm **)
 
 let existseq_thm x t =
   let filtered_var = in_dec string_dec x (term_free_vars t) in
-  if filtered_var
-  then t_Thm
-  else mkThm (Exists (x, (Eq ((Var x), t))))
+  if filtered_var then t_Thm else mkThm (Exists (x, (Eq ((Var x), t))))
 
 (** val eqrefl_thm : term -> thm **)
 
 let eqrefl_thm t =
   mkThm (Eq (t, t))
+
+(** val eqsymm_thm : term -> term -> thm **)
+
+let eqsymm_thm t s =
+  mkThm (Imp ((Eq (t, s)), (Eq (s, t))))
+
+(** val eqtrans_thm : term -> term -> term -> thm **)
+
+let eqtrans_thm t s r =
+  mkThm (Imp ((Eq (t, s)), (Imp ((Eq (s, r)), (Eq (t, r))))))
 
 (** val iffimp1_thm : formula -> formula -> thm **)
 
@@ -447,8 +413,7 @@ let not_thm p =
 (** val and_thm : formula -> formula -> thm **)
 
 let and_thm p q =
-  mkThm (Iff ((And (p, q)), (Imp ((Imp (p, (Imp (q, Ffalse)))),
-    Ffalse))))
+  mkThm (Iff ((And (p, q)), (Imp ((Imp (p, (Imp (q, Ffalse)))), Ffalse))))
 
 (** val or_thm : formula -> formula -> thm **)
 
@@ -467,25 +432,19 @@ let rec formulas_imp l ccl =
   | [] -> ccl
   | hd :: tl -> Imp (hd, (formulas_imp tl ccl))
 
-(** val funcong_thm :
-    char list -> term list -> term list -> thm **)
+(** val funcong_thm : char list -> term list -> term list -> thm **)
 
 let funcong_thm f lhs rhs =
   mkThm
-    (formulas_imp
-      (map (fun x -> Eq ((fst x), (snd x))) (zip lhs rhs)) (Eq
-      ((Fn (f, (fst (unzip (zip lhs rhs))))), (Fn (f,
-      (snd (unzip (zip lhs rhs))))))))
+    (formulas_imp (map (fun x -> Eq ((fst x), (snd x))) (zip lhs rhs)) (Eq ((Fn (f,
+      (fst (unzip (zip lhs rhs))))), (Fn (f, (snd (unzip (zip lhs rhs))))))))
 
-(** val predcong_thm :
-    char list -> term list -> term list -> thm **)
+(** val predcong_thm : char list -> term list -> term list -> thm **)
 
 let predcong_thm p lhs rhs =
   mkThm
-    (formulas_imp
-      (map (fun x -> Eq ((fst x), (snd x))) (zip lhs rhs)) (Imp
-      ((Atom (p, (fst (unzip (zip lhs rhs))))), (Atom (p,
-      (snd (unzip (zip lhs rhs))))))))
+    (formulas_imp (map (fun x -> Eq ((fst x), (snd x))) (zip lhs rhs)) (Imp ((Atom (p,
+      (fst (unzip (zip lhs rhs))))), (Atom (p, (snd (unzip (zip lhs rhs))))))))
 
 module Proven =
  struct
@@ -511,8 +470,7 @@ module Proven =
   let axiom_addimp =
     addimp_thm
 
-  (** val axiom_distribimp :
-      formula -> formula -> formula -> coq_Thm **)
+  (** val axiom_distribimp : formula -> formula -> formula -> coq_Thm **)
 
   let axiom_distribimp =
     distribimp_thm
@@ -522,8 +480,7 @@ module Proven =
   let axiom_doubleneg =
     doubleneg_thm
 
-  (** val axiom_allimp :
-      char list -> formula -> formula -> coq_Thm **)
+  (** val axiom_allimp : char list -> formula -> formula -> coq_Thm **)
 
   let axiom_allimp =
     allimp_thm
@@ -543,14 +500,22 @@ module Proven =
   let axiom_eqrefl =
     eqrefl_thm
 
-  (** val axiom_funcong :
-      char list -> term list -> term list -> coq_Thm **)
+  (** val axiom_eqsymm : term -> term -> coq_Thm **)
+
+  let axiom_eqsymm =
+    eqsymm_thm
+
+  (** val axiom_eqtrans : term -> term -> term -> coq_Thm **)
+
+  let axiom_eqtrans =
+    eqtrans_thm
+
+  (** val axiom_funcong : char list -> term list -> term list -> coq_Thm **)
 
   let axiom_funcong =
     funcong_thm
 
-  (** val axiom_predcong :
-      char list -> term list -> term list -> coq_Thm **)
+  (** val axiom_predcong : char list -> term list -> term list -> coq_Thm **)
 
   let axiom_predcong =
     predcong_thm

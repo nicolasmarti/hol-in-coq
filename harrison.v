@@ -14,6 +14,7 @@ thoughts/points:
   => for each constructor applied to the induction predicate, 
      we have a rewriting lemma [ Rec (c a_0 ... a_n) = P a_0 ... a_n ]
      (avoiding verbose goals on unfolding/reducing proof terms)
+     (WfExtensionality.fix_sub_eq_ext being of first importance)
 
 - usual logic's notions:
   ==> a model maps terms to values, and propositions to booleans/Prop@coq
@@ -94,10 +95,11 @@ Require Import String.
 Require Import Lia.
 
 (* just for dev time *)
-
 From Hammer Require Import Hammer.
 Set Hammer GSMode 2.
-
+(* hammer *)
+From Tactician Require Import Ltac1.
+(* Suggest, synth *)
 (**)
 
 
@@ -207,7 +209,6 @@ Lemma remove_dec_in2  {A: Type} (A_dec: forall (x y: A), { x = y } + { x <> y })
 Qed.
 
 (**)
-
 
 Fixpoint replace_dec
   {A: Type}
@@ -490,7 +491,7 @@ Qed.
   Qed.
 
 (*
-  decidability of equiality on terms
+  decidability of equality on terms
 *)  
 
 Program Definition term_eq_dec (t1: term) : forall t2, { t1 = t2 } + { t1 <> t2 }:=
@@ -2044,9 +2045,9 @@ Definition eq_trans (s t u: term): |- (s == t) ==> (t == u) ==> (s == u) := lemm
 (********* interactive proof style *********)
 
 (* the dependent type *)
-Definition Justification (hypos: list formula) (conclusion: formula) :=  |- formulas_conj_alt hypos ==> conclusion.
+Definition Inference_rule (hypos: list formula) (conclusion: formula) :=  |- formulas_conj_alt hypos ==> conclusion.
 
-Notation "hyps '|--' ccl" := (Justification hyps ccl) (at level 150, right associativity).
+Notation "hyps '|--' ccl" := (Inference_rule hyps ccl) (at level 150, right associativity).
 
 (* the datatype *)
 
@@ -2085,16 +2086,6 @@ given
 
 we can remove the p_i
 (3) |- p_0 /\ ... /\ p_n -> g
-
-rmq: surprising how we mess in the lemma with the order of inference rule:
-
- (2) (3) 
----------
-   (1)
-
-but here: (2) -> (1) -> (3)
-
-[need to clarify this point]
 
 *)
 
@@ -2146,8 +2137,6 @@ given
 
 we can replace p_i by the q_0, ..., q_m
 |- p_0 /\ ... /\ q_0 /\ ... /\ q_m /\ p_n -> g
-
-same remarque as above
 
 We also provide the alternative
 
