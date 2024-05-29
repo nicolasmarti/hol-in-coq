@@ -1132,8 +1132,13 @@ Lemma lemma_true:
   red; auto.
 Qed.
 
+Lemma truth: |- ftrue.
+  red; intros.
+  sauto.
+Qed.
+
 Program Definition true_thm: Thm :=
-  mkThm _ lemma_true.
+  mkThm _ truth.
 
 (**)
 
@@ -1706,14 +1711,14 @@ Definition imp_swap_thm (thm: Thm): Thm :=
   | _ => true_thm
   end.
 
-(************* checked up to here *******************)
-
 Lemma imp_trans_th p q r: |- (q ==> r) ==> (p ==> q) ==> (p ==> r).
   apply ( imp_trans
             (lemma_addimp (q ==> r) p)
             (lemma_distribimp p q r)
         ).
 Qed.
+
+Definition imp_trans_th_thm p q r : Thm := mkThm2 (imp_trans_th p q r).
 
 Lemma imp_add_concl r {p q} (H: |- p ==> q): |- (q ==> r) ==> (p ==> r).
   apply (
@@ -1722,6 +1727,12 @@ Lemma imp_add_concl r {p q} (H: |- p ==> q): |- (q ==> r) ==> (p ==> r).
         H
     ).
 Qed.
+
+Definition imp_add_concl_thm r (thm: Thm): Thm :=
+  match concl thm with
+  | p ==> q => prfthm_2 (@imp_add_concl r p q) thm
+  | _ => true_thm
+  end.
 
 Lemma imp_swap_th p q r: |- (p ==> q ==> r) ==> (q ==> p ==> r).
   apply ( imp_trans
@@ -1733,6 +1744,8 @@ Lemma imp_swap_th p q r: |- (p ==> q ==> r) ==> (q ==> p ==> r).
         ).
 Qed.
 
+Definition imp_swap_th_thm p q r: Thm := mkThm2 (imp_swap_th p q r).
+
 Lemma imp_swap2 {p q r s t u} (H: |- (p ==> q ==> r) ==> (s ==> t ==> u)): |- (q ==> p ==> r) ==> (t ==> s ==> u).
   apply (
       imp_trans
@@ -1741,19 +1754,47 @@ Lemma imp_swap2 {p q r s t u} (H: |- (p ==> q ==> r) ==> (s ==> t ==> u)): |- (q
     ).
 Qed.
 
+Definition imp_swap2_thm (thm: Thm) : Thm :=
+  match concl thm with
+  | (p ==> q ==> r) ==> (s ==> t ==> u) => prfthm_2 (@imp_swap2 p q r s t u) thm
+  | _ => true_thm
+  end.
+
 Lemma right_mp {p q r} (H0: |- p ==> q ==> r) (H1: |- p ==> q): |- p ==> r.
   apply (imp_undiplicate (imp_trans H1 (imp_swap H0))).
 Qed.
+
+Definition right_mp_thm (thm1 thm2: Thm) : Thm :=
+  match concl thm1 with
+  | (p ==> q ==> r) =>
+      match concl thm2 with
+      | p ==> q => prfthm_3 (@right_mp p q r) thm1 thm2
+      | _ => true_thm
+      end
+  | _ => true_thm
+  end.
 
 Lemma iff_imp1 {p q} (H: |- p <=> q): |- p ==> q.
   generalize (lemma_iffimp1 p q); intros.
   apply (modusponens H0 H).
 Qed.
 
+Definition iff_imp1_thm (thm: Thm) : Thm :=
+  match concl thm with
+  | (p <=> q) => prfthm_2 (@iff_imp1 p q) thm
+  | _ => true_thm
+  end.
+
 Lemma iff_imp2 {p q} (H: |- p <=> q): |- q ==> p.
   generalize (lemma_iffimp2 p q); intros.
   apply (modusponens H0 H).
 Qed.
+
+Definition iff_imp2_thm (thm: Thm) : Thm :=
+  match concl thm with
+  | (p <=> q) => prfthm_2 (@iff_imp2 p q) thm
+  | _ => true_thm
+  end.
 
 Lemma imp_antisym {p q} (H0: |- p ==> q) (H1: |- q ==> p): |- p <=> q.
   apply (modusponens
@@ -1765,17 +1806,35 @@ Lemma imp_antisym {p q} (H0: |- p ==> q) (H1: |- q ==> p): |- p <=> q.
         ).
 Qed.
 
-Lemma right_doubleneg {p q} (H: |- p ==> (q ==> ffalse) ==> ffalse ): |- p ==> q.
+Definition imp_antisym_thm (thm1 thm2: Thm) : Thm :=
+  match concl thm1 with
+  | (p ==> q) =>
+      match concl thm2 with
+      | q ==> p => prfthm_3 (@imp_antisym p q) thm1 thm2
+      | _ => true_thm
+      end
+  | _ => true_thm
+  end.
+
+Lemma right_doubleneg {p q} (H: |- p ==> (q ==> ffalse) ==> ffalse): |- p ==> q.
   generalize (lemma_doubleneg q); intro.
   generalize (imp_trans H H0); intro.
   apply H1.
 Qed.
+
+Definition right_doubleneg_thm (thm: Thm) : Thm :=
+  match concl thm with
+  |  p ==> (q ==> ffalse) ==> ffalse => prfthm_2 (@right_doubleneg p q) thm
+  | _ => true_thm
+  end.
 
 Lemma ex_falso p: |- ffalse ==> p.
   apply (right_doubleneg
            (lemma_addimp ffalse (p ==> ffalse))
         ).
 Qed.
+
+Definition ex_falso_thm p: Thm := mkThm2 (ex_falso p).
 
 Lemma imp_trans2 {p q r s} (H0: |- p ==> q ==> r) (H1: |- r ==> s): |- p ==> q ==> s.
   generalize (
@@ -1788,12 +1847,17 @@ Lemma imp_trans2 {p q r s} (H0: |- p ==> q ==> r) (H1: |- r ==> s): |- p ==> q =
   apply (modusponens H H0).
 Qed.
 
-Lemma truth: |- ftrue.
-  apply (modusponens
-           (iff_imp2 lemma_true)
-           (imp_refl ffalse)
-        ).
-Qed.
+Definition imp_trans2_thm (thm1 thm2: Thm) : Thm :=
+  match concl thm1 with
+  | (p ==> q ==> r) =>
+      match concl thm2 with
+      | r ==> s => prfthm_3 (@imp_trans2 p q r s) thm1 thm2
+      | _ => true_thm
+      end
+  | _ => true_thm
+  end.
+
+(************* checked up to here *******************)
 
 (*
 
@@ -2005,7 +2069,7 @@ Program Definition expand_connective (f: formula) : { fm: formula | |- f <=> fm 
 
 Definition expand_connective (f: formula): Thm :=
   match f with
-  | ftrue => mkThm _ lemma_true
+  | ftrue => true_thm
   | ~~ p => mkThm _ (lemma_not p)
   | p //\\ q => mkThm _ (lemma_and p q)
   | p \\// q => mkThm _ (lemma_or p q)
