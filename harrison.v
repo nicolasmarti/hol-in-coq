@@ -1566,6 +1566,61 @@ Extraction "harrison.ml" Proven.
 
 (************************************************************)
 
+
+(*** experimental ***)
+
+(*
+  definition to perform transformation: thm <-> |- p
+*)
+Program Definition prfthm_2 {p q} (H: (|- p) -> |- q) (thm: Thm): Thm :=
+  match formula_dec p (concl thm) with
+  | left Heq => mkThm q _
+  | right _ => T_Thm
+  end.
+Next Obligation.
+  apply H.
+  sauto. (* I absolutely do not understand ... *)
+Qed.
+
+Program Definition prfthm_3 {p q r} (H: (|- p) -> (|- q) -> |-r ) (thm_p thm_q: Thm): Thm :=
+  match formula_dec p (concl thm_p) with
+  | left Heq1 =>
+      match formula_dec q (concl thm_q) with
+      | left Heq2 => mkThm r (H _ _)
+      | right _ => T_Thm
+      end
+  | right _ => T_Thm
+  end.
+Next Obligation.
+  sauto. (* I absolutely do not understand ... *)
+Qed.
+
+Program Definition prfthm_4 {p q r s} (H: (|- p) -> (|- q) -> (|- r)-> |- s ) (thm_p thm_q thm_r: Thm): Thm :=
+  match formula_dec p (concl thm_p) with
+  | left Heq1 =>
+      match formula_dec q (concl thm_q) with
+      | left Heq2 =>
+          match formula_dec r (concl thm_r) with
+          | left Heq2 => mkThm s (H _ _ _)
+          | right _ => T_Thm
+      end
+      | right _ => T_Thm
+      end
+  | right _ => T_Thm
+  end.
+Next Obligation.
+  sauto. (* I absolutely do not understand ... *)
+Qed.
+Next Obligation.
+  sauto. (* I absolutely do not understand ... *)
+Qed.
+Next Obligation.
+  sauto. (* I absolutely do not understand ... *)
+Qed.
+Next Obligation.
+  sauto. (* I absolutely do not understand ... *)
+Qed.
+
 (******* further propositional lemmas *********)
 
 Lemma imp_refl p: |- p ==> p.
@@ -1574,7 +1629,9 @@ Lemma imp_refl p: |- p ==> p.
   generalize (modusponens H H0); intros.
   generalize (lemma_addimp p p); intros.
   apply (modusponens H1 H2).
-Qed.  
+Qed.
+
+Definition imp_refl_thm p : Thm := mkThm2 (imp_refl p).
   
 Lemma imp_undiplicate {p q} (H: |- p ==> p ==> q): |- p ==> q.
   generalize (lemma_distribimp p p q); intros.
@@ -1583,16 +1640,30 @@ Lemma imp_undiplicate {p q} (H: |- p ==> p ==> q): |- p ==> q.
   apply (modusponens H1 H2).
 Qed.
 
+Definition imp_undiplicate_thm (thm: Thm) : Thm :=
+  match concl thm with
+  | p ==> r ==> q => prfthm_2 (@imp_undiplicate p q) thm
+  | _ => true_thm
+  end.
+
 Lemma add_assum p {q} (H: |- q): |- p ==> q.
   generalize (lemma_addimp q p); intros.
   apply (modusponens H0 H).
 Qed.
+
+Definition add_sum_thm p (thm: Thm): Thm := prfthm_2 (@add_assum p (concl thm)) thm.
 
 Lemma imp_add_assum p {q r} (H: |- q ==> r): |- (p ==> q) ==> (p ==> r).
   generalize (lemma_distribimp p q r); intros.
   generalize (add_assum p H); intros.
   apply (modusponens H0 H1).
 Qed.
+
+Definition imp_add_assum_thm p (thm: Thm) : Thm :=
+  match concl thm with
+  | q ==> r => prfthm_2 (@imp_add_assum p q r) thm
+  | _ => true_thm
+  end.
 
 Lemma imp_trans {p q r} (H0: |- p ==> q) (H1: |- q ==> r): |- p ==> r.
   apply (modusponens
@@ -1601,10 +1672,26 @@ Lemma imp_trans {p q r} (H0: |- p ==> q) (H1: |- q ==> r): |- p ==> r.
         ).
 Qed.
 
+Definition imp_trans_thm (thm1 thm2: Thm) : Thm :=
+  match concl thm1 with
+  | p ==> q =>
+      match concl thm2 with
+      | q2 ==> r => prfthm_3 (@imp_trans p q r) thm1 thm2
+      | _ => true_thm
+      end
+  | _ => true_thm
+  end.
+
 Lemma imp_insert q {p r} (H: |- p ==> r): |- p ==> q ==> r.
   generalize (lemma_addimp r q); intros.
   apply (imp_trans H H0).
 Qed.
+
+Definition imp_insert_thm q (thm: Thm) : Thm :=
+  match concl thm with
+  | p ==> r => prfthm_2 (@imp_insert q p r) thm
+  | _ => true_thm
+  end.
 
 Lemma imp_swap {p q r} (H: |- p ==> q ==> r): |- q ==> p ==> r.
   generalize (lemma_addimp q p); intro H0.
@@ -1612,6 +1699,14 @@ Lemma imp_swap {p q r} (H: |- p ==> q ==> r): |- q ==> p ==> r.
   generalize (modusponens H1 H); intro H2.
   apply (imp_trans H0 H2).
 Qed.
+
+Definition imp_swap_thm (thm: Thm): Thm :=
+  match concl thm with
+  | p ==> q ==> r => prfthm_2 (@imp_swap p q r) thm
+  | _ => true_thm
+  end.
+
+(************* checked up to here *******************)
 
 Lemma imp_trans_th p q r: |- (q ==> r) ==> (p ==> q) ==> (p ==> r).
   apply ( imp_trans
@@ -1930,60 +2025,6 @@ Definition negativef (f: formula): bool :=
   | p ==> ffalse => true
   | p => false
   end.
-
-(*** experimental ***)
-
-(*
-  definition to perform transformation: thm <-> |- p
-*)
-Program Definition prfthm_2 {p q} (H: (|- p) -> |- q) (thm: Thm): Thm :=
-  match formula_dec p (concl thm) with
-  | left Heq => mkThm q _
-  | right _ => T_Thm
-  end.
-Next Obligation.
-  apply H.
-  sauto. (* I absolutely do not understand ... *)
-Qed.
-
-Program Definition prfthm_3 {p q r} (H: (|- p) -> (|- q) -> |-r ) (thm_p thm_q: Thm): Thm :=
-  match formula_dec p (concl thm_p) with
-  | left Heq1 =>
-      match formula_dec q (concl thm_q) with
-      | left Heq2 => mkThm r (H _ _)
-      | right _ => T_Thm
-      end
-  | right _ => T_Thm
-  end.
-Next Obligation.
-  sauto. (* I absolutely do not understand ... *)
-Qed.
-
-Program Definition prfthm_4 {p q r s} (H: (|- p) -> (|- q) -> (|- r)-> |- s ) (thm_p thm_q thm_r: Thm): Thm :=
-  match formula_dec p (concl thm_p) with
-  | left Heq1 =>
-      match formula_dec q (concl thm_q) with
-      | left Heq2 =>
-          match formula_dec r (concl thm_r) with
-          | left Heq2 => mkThm s (H _ _ _)
-          | right _ => T_Thm
-      end
-      | right _ => T_Thm
-      end
-  | right _ => T_Thm
-  end.
-Next Obligation.
-  sauto. (* I absolutely do not understand ... *)
-Qed.
-Next Obligation.
-  sauto. (* I absolutely do not understand ... *)
-Qed.
-Next Obligation.
-  sauto. (* I absolutely do not understand ... *)
-Qed.
-Next Obligation.
-  sauto. (* I absolutely do not understand ... *)
-Qed.
   
 (* usage *)
 
@@ -2043,6 +2084,17 @@ Definition eq_trans (s t u: term): |- (s == t) ==> (t == u) ==> (s == u) := lemm
 (************************************************************)
 
 (********* interactive proof style *********)
+
+(*
+  this is completely wrong.
+  inference rule are
+
+  List Thm -> Thm
+
+
+
+*)
+
 
 (* the dependent type *)
 Definition Inference_rule (hypos: list formula) (conclusion: formula) :=  |- formulas_conj_alt hypos ==> conclusion.
